@@ -17,6 +17,9 @@ import { FilesModule } from './files/files.module';
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,      
       autoLoadEntities: true,
+       ssl: {
+        rejectUnauthorized: true, 
+      },
       synchronize: true,
     }),
 
