@@ -1,4 +1,8 @@
-import { BeforeInsert, BeforeUpdate, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { BeforeInsert, BeforeUpdate, Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { ProductImage } from './products-image.entity';
+import { Business } from './bussines.entity';
+
+
 
 @Entity()
 export class Product {
@@ -47,8 +51,6 @@ export class Product {
     })
     tags: string[];
 
-    // images
-
     @BeforeInsert()
     checkSlugInsert() {
 
@@ -72,4 +74,17 @@ export class Product {
     }
 
 
+     // images
+
+      @OneToMany(
+        () => ProductImage,
+        (productImage) => productImage.product,
+        { cascade: true, eager: true } 
+    )
+    images?: ProductImage[];
+
+    // Bussines
+    @ManyToOne(() => Business, (business) => business.products, { eager: true })
+    @JoinColumn({ name: 'business_id' }) // Nombre de la columna de relación
+    business: Business
 }

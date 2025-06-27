@@ -1,5 +1,5 @@
 import { IsArray, IsIn, IsInt, IsNumber, IsOptional, 
-         IsPositive, IsString, MinLength 
+         IsPositive, IsString, IsUUID, MinLength 
 } from 'class-validator';
 
 
@@ -38,5 +38,16 @@ export class CreateProductDto {
     @IsArray()
     @IsOptional()
     tags: string[];
+
+
+    @IsString({each: true})
+    @IsArray()
+    @IsOptional()
+    images: string[];
+
+    @IsUUID()
+    @IsOptional()
+    business_id?: string;
+
 
 }

@@ -4,12 +4,14 @@ import { ProductsService } from './products.service';
 import { ProductsController } from './products.controller';
 
 import { Product } from './entities/product.entity';
+import { ProductImage } from './entities/products-image.entity';
+import { Business } from './entities/bussines.entity';
 
 @Module({
   controllers: [ProductsController],
   providers: [ProductsService],
   imports: [
-    TypeOrmModule.forFeature([ Product ])
+    TypeOrmModule.forFeature([ Product, ProductImage, Business ])
   ]
 })
 export class ProductsModule {}
