@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ProductsModule } from './products/products.module';
 import { CommonModule } from './common/common.module';
 import { FilesModule } from './files/files.module';
+import { BusinessModule } from './bussines/bussines.module';
 
 @Module({
   imports: [
@@ -17,13 +18,11 @@ import { FilesModule } from './files/files.module';
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,      
       autoLoadEntities: true,
-       ssl: {
-        rejectUnauthorized: true, 
-      },
       synchronize: true,
     }),
 
     ProductsModule,
+    BusinessModule,
     FilesModule,
     CommonModule,
   ],

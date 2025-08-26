@@ -9,8 +9,7 @@ import { PaginationDto } from 'src/common/dtos/pagination.dto';
 import { Product } from './entities/product.entity';
 import { ProductImage } from './entities/products-image.entity';
 import { Business } from './entities/bussines.entity';
-import { CreateBusinessDto } from './dto/create-bussines.dto';
-import { UpdateBusinessDto } from './dto/update-bussines.dto';
+
 
 
 @Injectable()
@@ -144,6 +143,8 @@ export class ProductsService {
     await this.productRepository.remove(product);
   }
 
+
+
   private handleDBExceptions(error: any) {
     if (error.code === '23505') {
       throw new BadRequestException(error.detail);
@@ -152,44 +153,6 @@ export class ProductsService {
     throw new InternalServerErrorException('Unexpected error, check server logs');
   }
 
- async createBusiness(createBusinessDto: CreateBusinessDto): Promise<Business> {
-    const business = this.businessRepository.create(createBusinessDto);
-    return this.businessRepository.save(business);
-  }
-
-  // Método para actualizar un negocio
-  async updateBusiness(id: string, updateBusinessDto: UpdateBusinessDto): Promise<Business> {
-    const business = await this.businessRepository.preload({ id, ...updateBusinessDto });
-    if (!business) {
-      throw new NotFoundException(`Business with id ${id} not found`);
-    }
-    return this.businessRepository.save(business);
-  }
-
-  // Método para obtener un negocio
-  async findBusinessById(id: string): Promise<Business> {
-    const business = await this.businessRepository.findOne({
-      where: { id },
-      relations: ['products'], // Carga los productos asociados al negocio
-    });
-    if (!business) {
-      throw new NotFoundException(`Business with id ${id} not found`);
-    }
-    return business;
-  }
-
-  async findAllBusiness( paginationDto: PaginationDto  ){
-    const {limit = 10, offset= 0 } = paginationDto
-
-    const business = await this.businessRepository.find({
-      take: limit,
-      skip: offset,
-      relations: ['products'],
-    })
-
-    return business
-
-  }
 
 }
 

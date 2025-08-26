@@ -14,7 +14,7 @@ export class FilesController {
     private readonly configService: ConfigService
   ) {}
 
-  @Get('food/:imageName' )
+  @Get('products/:imageName' )
   findFoodImage(
     @Res() res: Response, 
     @Param('imageName') imageName: string
@@ -35,7 +35,7 @@ export class FilesController {
     res.sendFile(path);
   }
 
-  @Get('exercise/:imageName')
+  @Get('bussiness/:imageName')
   findExerciseImage(
     @Res() res: Response, 
     @Param('imageName') imageName: string
@@ -45,11 +45,11 @@ export class FilesController {
     res.sendFile(path);
   }
 
-  @Post('food')
+  @Post('products')
   @UseInterceptors( FileInterceptor('file',{
     fileFilter: fileFilter,
     storage:diskStorage({
-      destination: './static//foods',
+      destination: './static//products',
       filename:fileNamer
     })
   }))
@@ -63,7 +63,7 @@ export class FilesController {
 
    /*  const secureUrl= `${file.filename}`; */
 
-    const secureUrl = `${this.configService.get('HOST_API')}/files/food/${file.filename}`
+    const secureUrl = `${this.configService.get('HOST_API')}/files/products/${file.filename}`
 
     return {
      secureUrl 
@@ -90,11 +90,11 @@ export class FilesController {
     }
   }
   
-  @Post('exercise')
+  @Post('bussiness')
   @UseInterceptors( FileInterceptor('file',{
     fileFilter: fileFilter,
     storage:diskStorage({
-      destination: './static//exercise',
+      destination: './static//bussiness',
       filename:fileNamer
     })
   }))
@@ -107,7 +107,7 @@ export class FilesController {
     }
 
 
-    const secureUrl = `${this.configService.get('HOST_API')}/files/exercise/${file.filename}`
+    const secureUrl = `${this.configService.get('HOST_API')}/files/bussines/${file.filename}`
 
     return {
      secureUrl 

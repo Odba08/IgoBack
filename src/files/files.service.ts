@@ -7,7 +7,7 @@ import { existsSync } from 'fs';
 export class FilesService {
 
     getStaticProductImage(imageName: string){
-        const path = join(__dirname, '../../static/foods', imageName);
+        const path = join(__dirname, '../../static/products', imageName);
 
         if (!existsSync(path))
             throw new BadRequestException('Image not found');
@@ -24,7 +24,7 @@ export class FilesService {
     }
 
     getStaticProductImageniu(imageName: string){
-        const path = join(__dirname, '../../static/exercise', imageName);
+        const path = join(__dirname, '../../static/bussiness', imageName);
 
         if (!existsSync(path))
             throw new BadRequestException('Image not found');
