@@ -12,9 +12,14 @@ import { validate as isUUID } from 'uuid';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PaginationDto } from 'src/common/dtos/pagination.dto';
+
+// ENTITIES
 import { Product } from './entities/product.entity';
 import { ProductImage } from './entities/products-image.entity';
 import { Business } from './entities/bussines.entity';
+import { BussinesImage } from './entities/bussines-image.entity'; // Aseguarate de importar esto
+
+// DTOS
 import { CreateBusinessDto } from './dto/create-bussines.dto';
 import { UpdateBusinessDto } from './dto/update-bussines.dto';
 
@@ -32,43 +37,43 @@ export class BussinessService {
     @InjectRepository(ProductImage)
     private readonly productImageRepository: Repository<ProductImage>,
 
-    private readonly dataSource: DataSource, // Para transacciones
+    // CORRECCIÓN 1: Inyectamos el repositorio correcto para imágenes de negocio
+    @InjectRepository(BussinesImage)
+    private readonly businessImageRepository: Repository<BussinesImage>,
+
+    private readonly dataSource: DataSource,
   ) {}
 
   // ================== BUSINESS ==================
-
-  /* async createBusiness(createBusinessDto: CreateBusinessDto): Promise<Business> {
-    const business = this.businessRepository.create(createBusinessDto);
-    return this.businessRepository.save(business);
-  }
- */
 
   async createBusiness(createBusinessDto: CreateBusinessDto): Promise<Business> {
     const { images = [], ...businessDetails } = createBusinessDto;
 
     const business = this.businessRepository.create({
       ...businessDetails,
+      // CORRECCIÓN 2: Usamos businessImageRepository, no productImageRepository
       images: images.map((url) =>
-        this.productImageRepository.create({ url }),
+        this.businessImageRepository.create({ url }),
       ),
     });
 
     await this.businessRepository.save(business);
     return business;
   }
-   
+    
   async findAllBusiness(paginationDto: PaginationDto) {
     const { limit = 10, offset = 0 } = paginationDto;
     return this.businessRepository.find({
       take: limit,
       skip: offset,
+      relations: { images: true }, // Agregamos relación para ver las fotos al listar
     });
   }
 
   async findBusinessById(id: string): Promise<Business> {
     const business = await this.businessRepository.findOne({
       where: { id },
-      relations: ['products'],
+      relations: ['products', 'images'], // Importante traer las imágenes
     });
     if (!business) {
       throw new NotFoundException(`Business with id ${id} not found`);
@@ -76,18 +81,55 @@ export class BussinessService {
     return business;
   }
 
+  // CORRECCIÓN 3: Lógica completa de actualización
   async updateBusiness(
     id: string,
     updateBusinessDto: UpdateBusinessDto,
   ): Promise<Business> {
+    const { images, ...toUpdate } = updateBusinessDto;
+
+    // Preload fusiona los datos simples
     const business = await this.businessRepository.preload({
       id,
-      ...updateBusinessDto,
+      ...toUpdate,
     });
+
     if (!business) {
       throw new NotFoundException(`Business with id ${id} not found`);
     }
-    return this.businessRepository.save(business);
+
+    // Lógica táctica para actualizar imágenes si vienen en el payload
+    if (images) {
+      // Borramos las imágenes viejas de este negocio (Estrategia de reemplazo total)
+      // Nota: Si prefieres agregar sin borrar, elimina esta línea de queryRunner.
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+      
+      try {
+        // Opción segura con transacción: Borrar viejas -> Insertar nuevas
+        await queryRunner.manager.delete(BussinesImage, { bussines: { id } });
+        
+        // Creamos las nuevas instancias
+        business.images = images.map(url => 
+            this.businessImageRepository.create({ url })
+        );
+        
+        // Guardamos el padre (que por cascade insertará las hijas)
+        await queryRunner.manager.save(business);
+        await queryRunner.commitTransaction();
+      } catch (error) {
+        await queryRunner.rollbackTransaction();
+        this.handleDBExceptions(error);
+      } finally {
+        await queryRunner.release();
+      }
+    } else {
+        // Si no hay imágenes, guardamos normal
+        await this.businessRepository.save(business);
+    }
+
+    return this.findBusinessById(id);
   }
 
   async removeBusiness(id: string) {
@@ -96,7 +138,8 @@ export class BussinessService {
   }
 
   // ================== PRODUCTS dentro de BUSINESS ==================
-
+  // (El resto de tu código de productos está bien, no lo toqué para no saturar)
+  
   async createForBusiness(
     businessId: string,
     createProductDto: CreateProductDto,
