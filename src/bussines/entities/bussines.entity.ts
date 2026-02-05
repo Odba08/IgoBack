@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
-import { Product } from './product.entity';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne } from 'typeorm';
 import { BussinesImage } from './bussines-image.entity';
+import { Category } from 'src/categories/entities/category.entity';
+import { Product } from 'src/products/entities/product.entity';
 
 @Entity()
 export class Business {
@@ -13,10 +14,12 @@ export class Business {
   })
   name: string;
 
+  @ManyToOne(() => Category, (category) => category.businesses, { eager: true })
+    category: Category;
 
-  @OneToMany(() => Product, (product) => product.business)
-  products: Product[];
-
+      @OneToMany(() => Product, (product) => product.business)
+      products: Product[];
+    
   @OneToMany(
           () => BussinesImage,
           (businessImage) => businessImage.bussines,

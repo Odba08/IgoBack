@@ -8,7 +8,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { PaginationDto } from 'src/common/dtos/pagination.dto';
 import { Product } from './entities/product.entity';
 import { ProductImage } from './entities/products-image.entity';
-import { Business } from './entities/bussines.entity';
+import { Business } from 'src/bussines/entities/bussines.entity';
 
 
 

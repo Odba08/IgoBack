@@ -5,6 +5,7 @@ import { ProductsModule } from './products/products.module';
 import { CommonModule } from './common/common.module';
 import { FilesModule } from './files/files.module';
 import { BusinessModule } from './bussines/bussines.module';
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { BusinessModule } from './bussines/bussines.module';
     BusinessModule,
     FilesModule,
     CommonModule,
+    CategoriesModule,
   ],
 })
 export class AppModule {}

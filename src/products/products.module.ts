@@ -5,7 +5,7 @@ import { ProductsController } from './products.controller';
 
 import { Product } from './entities/product.entity';
 import { ProductImage } from './entities/products-image.entity';
-import { Business } from './entities/bussines.entity';
+import { Business } from 'src/bussines/entities/bussines.entity';
 
 @Module({
   controllers: [ProductsController],

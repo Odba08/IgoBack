@@ -9,19 +9,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { validate as isUUID } from 'uuid';
 
-import { CreateProductDto } from './dto/create-product.dto';
-import { UpdateProductDto } from './dto/update-product.dto';
-import { PaginationDto } from 'src/common/dtos/pagination.dto';
-
-// ENTITIES
-import { Product } from './entities/product.entity';
-import { ProductImage } from './entities/products-image.entity';
 import { Business } from './entities/bussines.entity';
-import { BussinesImage } from './entities/bussines-image.entity'; // Aseguarate de importar esto
+import { BussinesImage } from './entities/bussines-image.entity';
 
 // DTOS
 import { CreateBusinessDto } from './dto/create-bussines.dto';
 import { UpdateBusinessDto } from './dto/update-bussines.dto';
+import { Product } from 'src/products/entities/product.entity';
+import { ProductImage } from 'src/products/entities/products-image.entity';
+import { PaginationDto } from 'src/common/dtos/pagination.dto';
+import { CreateProductDto } from 'src/products/dto/create-product.dto';
+import { UpdateProductDto } from 'src/products/dto/update-product.dto';
 
 @Injectable()
 export class BussinessService {
@@ -37,7 +35,6 @@ export class BussinessService {
     @InjectRepository(ProductImage)
     private readonly productImageRepository: Repository<ProductImage>,
 
-    // CORRECCIÓN 1: Inyectamos el repositorio correcto para imágenes de negocio
     @InjectRepository(BussinesImage)
     private readonly businessImageRepository: Repository<BussinesImage>,
 
@@ -51,7 +48,6 @@ export class BussinessService {
 
     const business = this.businessRepository.create({
       ...businessDetails,
-      // CORRECCIÓN 2: Usamos businessImageRepository, no productImageRepository
       images: images.map((url) =>
         this.businessImageRepository.create({ url }),
       ),
@@ -66,14 +62,14 @@ export class BussinessService {
     return this.businessRepository.find({
       take: limit,
       skip: offset,
-      relations: { images: true }, // Agregamos relación para ver las fotos al listar
+      relations: { images: true },
     });
   }
 
   async findBusinessById(id: string): Promise<Business> {
     const business = await this.businessRepository.findOne({
       where: { id },
-      relations: ['products', 'images'], // Importante traer las imágenes
+      relations: ['products', 'images', 'category'], // Agregué 'category' para que veas el cambio
     });
     if (!business) {
       throw new NotFoundException(`Business with id ${id} not found`);
@@ -81,41 +77,40 @@ export class BussinessService {
     return business;
   }
 
-  // CORRECCIÓN 3: Lógica completa de actualización
+  // --- AQUÍ ESTÁ EL CAMBIO CLAVE ---
   async updateBusiness(
     id: string,
     updateBusinessDto: UpdateBusinessDto,
   ): Promise<Business> {
-    const { images, ...toUpdate } = updateBusinessDto;
+    
+    // 1. Desestructuramos categoryId por separado
+    const { images, categoryId, ...toUpdate } = updateBusinessDto;
 
-    // Preload fusiona los datos simples
+    // 2. Preload fusiona los datos y convierte el ID en Relación
     const business = await this.businessRepository.preload({
       id,
       ...toUpdate,
+      // Si viene categoryId, creamos el objeto que TypeORM necesita
+      category: categoryId ? { id: categoryId } : undefined, 
     });
 
     if (!business) {
       throw new NotFoundException(`Business with id ${id} not found`);
     }
 
-    // Lógica táctica para actualizar imágenes si vienen en el payload
+    // 3. Lógica de Imágenes (Se mantiene tu lógica de Transacción)
     if (images) {
-      // Borramos las imágenes viejas de este negocio (Estrategia de reemplazo total)
-      // Nota: Si prefieres agregar sin borrar, elimina esta línea de queryRunner.
       const queryRunner = this.dataSource.createQueryRunner();
       await queryRunner.connect();
       await queryRunner.startTransaction();
       
       try {
-        // Opción segura con transacción: Borrar viejas -> Insertar nuevas
         await queryRunner.manager.delete(BussinesImage, { bussines: { id } });
         
-        // Creamos las nuevas instancias
         business.images = images.map(url => 
             this.businessImageRepository.create({ url })
         );
         
-        // Guardamos el padre (que por cascade insertará las hijas)
         await queryRunner.manager.save(business);
         await queryRunner.commitTransaction();
       } catch (error) {
@@ -125,7 +120,7 @@ export class BussinessService {
         await queryRunner.release();
       }
     } else {
-        // Si no hay imágenes, guardamos normal
+        // Si no hay imágenes, guardamos los cambios (incluyendo la categoría nueva)
         await this.businessRepository.save(business);
     }
 
@@ -138,7 +133,6 @@ export class BussinessService {
   }
 
   // ================== PRODUCTS dentro de BUSINESS ==================
-  // (El resto de tu código de productos está bien, no lo toqué para no saturar)
   
   async createForBusiness(
     businessId: string,
@@ -224,7 +218,6 @@ export class BussinessService {
 
     Object.assign(product, toUpdate);
 
-    // Transacción para imágenes
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();

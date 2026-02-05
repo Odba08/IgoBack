@@ -1,9 +1,13 @@
-import { IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateBusinessDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  @IsString()
+  @IsUUID()
+  categoryId: string;
 
   @IsString({ each: true })
   @IsArray()

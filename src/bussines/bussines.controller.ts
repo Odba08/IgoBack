@@ -10,11 +10,12 @@ import {
   Query,
 } from '@nestjs/common';
 import { BussinessService } from './bussines.service';
-import { CreateProductDto } from './dto/create-product.dto';
-import { UpdateProductDto } from './dto/update-product.dto';
+
 import { PaginationDto } from './../common/dtos/pagination.dto';
 import { CreateBusinessDto } from './dto/create-bussines.dto';
 import { UpdateBusinessDto } from './dto/update-bussines.dto';
+import { CreateProductDto } from 'src/products/dto/create-product.dto';
+import { UpdateProductDto } from 'src/products/dto/update-product.dto';
 
 @Controller('business')
 export class BusinessController {

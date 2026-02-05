@@ -27,12 +27,10 @@ export class CreateProductDto {
     @IsOptional()
     stock?: number; 
 
-    @IsString({ each: true })
+   @IsString({ each: true })
     @IsArray()
-    sizes: string[]
-
-    @IsIn(['men','women','kid','unisex'])
-    gender: string;
+    @IsOptional()
+    options?: string[];
 
     @IsString({ each: true })
     @IsArray()
@@ -48,6 +46,11 @@ export class CreateProductDto {
     @IsUUID()
     @IsOptional()
     business_id?: string;
+
+    @IsString()
+    @IsUUID()
+    @IsOptional()
+    categoryId?: string;
 
 
 }

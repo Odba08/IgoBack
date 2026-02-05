@@ -3,10 +3,11 @@ import { Module } from '@nestjs/common';
 import { BussinessService } from './bussines.service';
 import { BusinessController } from './bussines.controller';
 
-import { Product } from './entities/product.entity';
-import { ProductImage } from './entities/products-image.entity';
+
 import { Business } from './entities/bussines.entity';
 import { BussinesImage } from './entities/bussines-image.entity';
+import { Product } from 'src/products/entities/product.entity';
+import { ProductImage } from 'src/products/entities/products-image.entity';
 
 @Module({
   controllers: [BusinessController],

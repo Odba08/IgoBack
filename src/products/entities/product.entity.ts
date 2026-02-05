@@ -1,7 +1,7 @@
 import { BeforeInsert, BeforeUpdate, Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { ProductImage } from './products-image.entity';
-import { Business } from './bussines.entity';
-
+import { Category } from 'src/categories/entities/category.entity';
+import { Business } from 'src/bussines/entities/bussines.entity';
 
 
 @Entity()
@@ -36,14 +36,8 @@ export class Product {
     })
     stock: number;
 
-    @Column('text',{
-        array: true
-    })
-    sizes: string[];
-
-    @Column('text')
-    gender: string;
-
+    @Column('text', { array: true, default: [], nullable: true }) 
+    options: string[];
 
     @Column('text', {
         array: true,
@@ -64,6 +58,9 @@ export class Product {
             .replaceAll("'",'')
 
     }
+
+    @ManyToOne(() => Category, (category) => category.products, { eager: true })
+    category: Category;
 
     @BeforeUpdate()
     checkSlugUpdate() {
