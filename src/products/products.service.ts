@@ -10,8 +10,6 @@ import { Product } from './entities/product.entity';
 import { ProductImage } from './entities/products-image.entity';
 import { Business } from 'src/bussines/entities/bussines.entity';
 
-
-
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger('ProductsService');
@@ -26,27 +24,31 @@ export class ProductsService {
     @InjectRepository(ProductImage)
     private readonly productImageRepository: Repository<ProductImage>,
 
-    private readonly dataSource: DataSource, // Para transacciones
+    private readonly dataSource: DataSource,
   ) {}
 
-
   async create(createProductDto: CreateProductDto) {
+    console.log("DATAZO RECIBIDO:", createProductDto);
     try {
-      const { business_id, images = [], ...productDetails } = createProductDto;
+      // 1. DESESTRUCTURAR menuCategoryId
+      const { business_id, menuCategoryId, images = [], ...productDetails } = createProductDto;
 
       let business = null;
 
-       if (business_id) {
-      business = await this.businessRepository.findOne({ where: { id: business_id } });
-      if (!business) {
-        throw new NotFoundException(`Business with id ${business_id} not found`);
+      if (business_id) {
+        business = await this.businessRepository.findOne({ where: { id: business_id } });
+        if (!business) {
+          throw new NotFoundException(`Business with id ${business_id} not found`);
+        }
       }
-    }
 
       const product = this.productRepository.create({
         ...productDetails,
-       images: images.map(image => this.productImageRepository.create({ url: image })),
-      business,
+        images: images.map(image => this.productImageRepository.create({ url: image })),
+        business,
+        // 2. GUARDAR LA RELACIÓN
+        // TypeORM es inteligente: si le pasas un objeto con ID, él crea la relación
+        menuCategory: menuCategoryId ? { id: menuCategoryId } : null,
       });
 
       await this.productRepository.save(product);
@@ -61,7 +63,7 @@ export class ProductsService {
     const products = await this.productRepository.find({
       take: limit,
       skip: offset,
-      relations: { images: true }, // Carga las imágenes automáticamente
+      relations: { images: true },
     });
 
     return products.map(product => ({
@@ -74,7 +76,10 @@ export class ProductsService {
     let product: Product;
 
     if (isUUID(term)) {
-      product = await this.productRepository.findOneBy({ id: term });
+      product = await this.productRepository.findOne({
+        where: { id: term },
+        relations: ['images', 'business', 'menuCategory'], // <--- ESTO YA ESTABA BIEN
+      });
     } else {
       const queryBuilder = this.productRepository.createQueryBuilder('prod');
       product = await queryBuilder
@@ -82,7 +87,9 @@ export class ProductsService {
           title: term.toUpperCase(),
           slug: term.toLowerCase(),
         })
-        .leftJoinAndSelect('prod.images', 'images') // Carga las imágenes
+        .leftJoinAndSelect('prod.images', 'images')
+        .leftJoinAndSelect('prod.business', 'business')
+        .leftJoinAndSelect('prod.menuCategory', 'menuCategory') // <--- ESTO YA ESTABA BIEN
         .getOne();
     }
 
@@ -90,7 +97,6 @@ export class ProductsService {
     return product;
   }
 
-  // Nuevo método para obtener producto plano (con URLs de imágenes)
   async findOnePlain(term: string) {
     const { images = [], ...rest } = await this.findOne(term);
     return {
@@ -100,20 +106,24 @@ export class ProductsService {
   }
 
   async update(id: string, updateProductDto: UpdateProductDto) {
-    const { business_id, images, ...toUpdate } = updateProductDto;
+    // 1. DESESTRUCTURAR menuCategoryId TAMBIÉN AQUÍ
+    const { business_id, menuCategoryId, images, ...toUpdate } = updateProductDto;
 
     const product = await this.productRepository.preload({ id, ...toUpdate });
     if (!product) throw new NotFoundException(`Product with id: ${id} not found`);
 
     if (business_id) {
-    const business = await this.businessRepository.findOne({ where: { id: business_id } });
-    if (!business) throw new NotFoundException(`Business with id ${business_id} not found`);
-    
-    // Asocia el negocio al producto
-    product.business = business;
-  }
+      const business = await this.businessRepository.findOne({ where: { id: business_id } });
+      if (!business) throw new NotFoundException(`Business with id ${business_id} not found`);
+      product.business = business;
+    }
 
-    // Transacción para manejo seguro de imágenes
+    // 2. ACTUALIZAR LA RELACIÓN SI VIENE
+    if (menuCategoryId) {
+       // @ts-ignore (A veces TS se queja, pero esto es válido en TypeORM)
+       product.menuCategory = { id: menuCategoryId }; 
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -121,7 +131,7 @@ export class ProductsService {
     try {
       if (images) {
         await queryRunner.manager.delete(ProductImage, { product: { id } });
-        product.images = images.map(image => 
+        product.images = images.map(image =>
           this.productImageRepository.create({ url: image }),
         );
       }
@@ -130,7 +140,7 @@ export class ProductsService {
       await queryRunner.commitTransaction();
       await queryRunner.release();
 
-      return this.findOnePlain(id); // Retorna el producto con imágenes planas
+      return this.findOnePlain(id);
     } catch (error) {
       await queryRunner.rollbackTransaction();
       await queryRunner.release();
@@ -143,8 +153,6 @@ export class ProductsService {
     await this.productRepository.remove(product);
   }
 
-
-
   private handleDBExceptions(error: any) {
     if (error.code === '23505') {
       throw new BadRequestException(error.detail);
@@ -152,7 +160,4 @@ export class ProductsService {
     this.logger.error(error);
     throw new InternalServerErrorException('Unexpected error, check server logs');
   }
-
-
 }
-

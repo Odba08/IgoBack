@@ -44,17 +44,25 @@ export class BussinessService {
   // ================== BUSINESS ==================
 
   async createBusiness(createBusinessDto: CreateBusinessDto): Promise<Business> {
-    const { images = [], ...businessDetails } = createBusinessDto;
+    // 1. Extraemos categoryId igual que hicimos en el update
+    const { images = [], categoryId, ...businessDetails } = createBusinessDto;
 
     const business = this.businessRepository.create({
       ...businessDetails,
+      
+      // 2. CONECTAMOS LA RELACIÓN
+      // Si existe el ID, creamos el objeto de conexión. Si no, lo dejamos null.
+      category: categoryId ? { id: categoryId } : null,
+      
       images: images.map((url) =>
         this.businessImageRepository.create({ url }),
       ),
     });
 
     await this.businessRepository.save(business);
-    return business;
+    
+    // 3. Retornamos usando findBusinessById para asegurar que traiga la relación completa
+    return this.findBusinessById(business.id);
   }
     
   async findAllBusiness(paginationDto: PaginationDto) {
@@ -66,11 +74,17 @@ export class BussinessService {
     });
   }
 
-  async findBusinessById(id: string): Promise<Business> {
+ async findBusinessById(id: string): Promise<Business> {
     const business = await this.businessRepository.findOne({
       where: { id },
-      relations: ['products', 'images', 'category'], // Agregué 'category' para que veas el cambio
+      relations: [
+        'images', 
+        'category',         // Categoría del Negocio (Ej: Gimnasio)
+        'products',         // Trae los productos
+        'products.menuCategory' // <--- EL CAMBIO CRÍTICO: Trae la categoría de CADA producto
+      ], 
     });
+    
     if (!business) {
       throw new NotFoundException(`Business with id ${id} not found`);
     }
@@ -134,11 +148,14 @@ export class BussinessService {
 
   // ================== PRODUCTS dentro de BUSINESS ==================
   
+ // ================== PRODUCTS dentro de BUSINESS ==================
+  
   async createForBusiness(
     businessId: string,
     createProductDto: CreateProductDto,
   ) {
-    const { images = [], ...productDetails } = createProductDto;
+    // 1. DESESTRUCTURAR menuCategoryId AQUÍ TAMBIÉN
+    const { images = [], menuCategoryId, ...productDetails } = createProductDto; // <<< AGREGADO menuCategoryId
 
     const business = await this.businessRepository.findOne({
       where: { id: businessId },
@@ -153,12 +170,14 @@ export class BussinessService {
         this.productImageRepository.create({ url }),
       ),
       business,
+      
+      // 2. ASIGNAR LA RELACIÓN
+      menuCategory: menuCategoryId ? { id: menuCategoryId } : null, // <<< ASIGNACIÓN VITAL
     });
 
     await this.productRepository.save(product);
     return { ...product, images };
   }
-
   async findAllForBusiness(
     businessId: string,
     paginationDto: PaginationDto,

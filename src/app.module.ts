@@ -6,6 +6,7 @@ import { CommonModule } from './common/common.module';
 import { FilesModule } from './files/files.module';
 import { BusinessModule } from './bussines/bussines.module';
 import { CategoriesModule } from './categories/categories.module';
+import { MenuCategoryModule } from './menu-category/menu-category.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { CategoriesModule } from './categories/categories.module';
     FilesModule,
     CommonModule,
     CategoriesModule,
+    MenuCategoryModule,
   ],
 })
 export class AppModule {}

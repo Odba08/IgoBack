@@ -1,7 +1,4 @@
-import { IsArray, IsIn, IsInt, IsNumber, IsOptional, 
-         IsPositive, IsString, IsUUID, MinLength 
-} from 'class-validator';
-
+import { IsArray, IsBoolean, IsInt, IsNumber, IsOptional, IsPositive, IsString, IsUUID, MinLength, Min} from 'class-validator';
 
 export class CreateProductDto {
 
@@ -27,30 +24,34 @@ export class CreateProductDto {
     @IsOptional()
     stock?: number; 
 
-   @IsString({ each: true })
-    @IsArray()
-    @IsOptional()
-    options?: string[];
-
     @IsString({ each: true })
     @IsArray()
     @IsOptional()
     tags: string[];
 
-
-    @IsString({each: true})
+    @IsString({ each: true })
     @IsArray()
     @IsOptional()
-    images: string[];
+    images?: string[];
 
-    @IsUUID()
+    // --- CAMPOS DE PROMO Y MENÚ ---
+    @IsBoolean()
     @IsOptional()
-    business_id?: string;
+    isPromo?: boolean;
+
+    @IsNumber()
+    @Min(0)
+    @IsOptional()
+    discountPrice?: number;
 
     @IsString()
     @IsUUID()
     @IsOptional()
-    categoryId?: string;
+    menuCategoryId?: string; 
 
-
+    // --- EL CAMPO QUE TE FALTA (SOLUCIÓN DEL ERROR) ---
+    @IsString()
+    @IsUUID()
+    @IsOptional()
+    business_id?: string; // <--- AGREGA ESTO
 }
