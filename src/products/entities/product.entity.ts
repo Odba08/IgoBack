@@ -53,6 +53,14 @@ export class Product {
     })
     tags: string[];
 
+
+    @Column('bool', { default: false })
+    isApproved: boolean;
+
+    
+    @Column('float', { default: 0 })
+    weight: number;
+
     // --- RELACIONES ---
 
     // Relación Antigua Global (Ej: Categoría general). Se queda por compatibilidad.

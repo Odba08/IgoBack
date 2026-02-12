@@ -1,6 +1,7 @@
-import { IsOptional, IsString, IsArray, IsUUID} from 'class-validator';
+import { IsOptional, IsString, IsArray, IsUUID, IsNumber } from 'class-validator';
 
 export class UpdateBusinessDto {
+  
   @IsString()
   @IsOptional()
   name?: string;
@@ -10,8 +11,26 @@ export class UpdateBusinessDto {
   @IsString({ each: true }) 
   images?: string[];
 
-    @IsString()
-    @IsUUID()
-    @IsOptional()
-    categoryId?: string;
+  @IsString()
+  @IsUUID()
+  @IsOptional()
+  categoryId?: string;
+
+  // --- LOS PASES DE ENTRADA QUE FALTABAN (FASE 2) ---
+
+  @IsNumber()
+  @IsOptional()
+  latitude?: number;
+
+  @IsNumber()
+  @IsOptional()
+  longitude?: number;
+
+  @IsString()
+  @IsOptional()
+  openTime?: string; 
+
+  @IsString()
+  @IsOptional()
+  closeTime?: string;
 }

@@ -34,7 +34,6 @@ export class CreateProductDto {
     @IsOptional()
     images?: string[];
 
-    // --- CAMPOS DE PROMO Y MENÚ ---
     @IsBoolean()
     @IsOptional()
     isPromo?: boolean;
@@ -49,9 +48,16 @@ export class CreateProductDto {
     @IsOptional()
     menuCategoryId?: string; 
 
-    // --- EL CAMPO QUE TE FALTA (SOLUCIÓN DEL ERROR) ---
     @IsString()
     @IsUUID()
+    @IsOptional() 
+    business_id?: string; 
+
+    @IsBoolean()
     @IsOptional()
-    business_id?: string; // <--- AGREGA ESTO
-}
+    isApproved?: boolean;
+
+    @IsNumber()
+    @IsOptional()
+    weight?: number;
+} 

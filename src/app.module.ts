@@ -7,6 +7,7 @@ import { FilesModule } from './files/files.module';
 import { BusinessModule } from './bussines/bussines.module';
 import { CategoriesModule } from './categories/categories.module';
 import { MenuCategoryModule } from './menu-category/menu-category.module';
+import { OrdersModule } from './orders/orders.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { MenuCategoryModule } from './menu-category/menu-category.module';
     CommonModule,
     CategoriesModule,
     MenuCategoryModule,
+    OrdersModule,
   ],
 })
 export class AppModule {}

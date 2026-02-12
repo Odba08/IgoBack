@@ -1,4 +1,4 @@
-import { IsArray, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsNotEmpty, IsOptional, IsString, IsUUID, IsNumber } from 'class-validator';
 
 export class CreateBusinessDto {
   @IsString()
@@ -13,4 +13,22 @@ export class CreateBusinessDto {
   @IsArray()
   @IsOptional()
   images: string[];
+
+    @IsNumber()
+    @IsOptional()
+    latitude?: number;
+
+    @IsNumber()
+    @IsOptional()
+    longitude?: number;
+
+    @IsString()
+    @IsOptional()
+    openTime?: string; 
+
+    @IsString()
+    @IsOptional()
+    closeTime?: string;
+
+    
 }
