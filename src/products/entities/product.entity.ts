@@ -5,6 +5,18 @@ import { Business } from 'src/bussines/entities/bussines.entity';
 // 1. IMPORTAR LA NUEVA ENTIDAD
 import { MenuCategory } from 'src/menu-category/entities/menu-category.entity';
 
+export interface OptionChoice{
+    name: string;
+    additionalPrice: number;
+} 
+
+export interface ProductOption{
+    title: string
+    isRequired: boolean;
+    maxAllowed: number;
+    choices: OptionChoice[];
+
+}
 
 @Entity()
 export class Product {
@@ -44,8 +56,10 @@ export class Product {
     })
     stock: number;
 
-    @Column('text', { array: true, default: [], nullable: true })
-    options: string[];
+    @Column({type: 'jsonb', 
+        default: []
+    })
+    options: ProductOption[];
 
     @Column('text', {
         array: true,
