@@ -1,14 +1,21 @@
-import { IsArray, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { IsArray, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Clase auxiliar para validar cada item del carrito
-class OrderItemDto {
-    @IsString()
-    @IsUUID()
-    productId: string;
+export class OrderItemDto {
+  @IsUUID()
+  productId: string;
 
-    @IsNumber()
-    quantity: number;
+  @IsInt()
+  @Min(1)
+  quantity: number;
+
+  @IsString()
+  selectedOptionsText: string; // Ej: "Medio, 2x Carne Adicional 150g"
+
+  @IsNumber()
+  @Min(0)
+  finalUnitPrice: number; // El precio final de la unidad incluyendo sus extras
 }
 
 export class CreateOrderDto {

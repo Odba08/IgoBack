@@ -10,6 +10,7 @@ import { Business } from 'src/bussines/entities/bussines.entity';
 
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { UpdateOrderDto } from './dto/update-order.dto';
 
 @Injectable()
 export class OrdersService {
@@ -141,7 +142,8 @@ export class OrdersService {
       };
 
     } catch (error) {
-      console.warn('Fallo OSRM, usando respaldo lineal:', error.message);
+
+     /*  console.warn('Fallo OSRM, usando respaldo lineal:', error.message); */
       // Respaldo matemático si el servicio externo falla
       const fallbackDist = this.calculateHaversine(lat1, lon1, lat2, lon2);
       return {
@@ -191,12 +193,13 @@ export class OrdersService {
     });
   }
 
-  async update(id: string, updateOrderDto: any) {
-    const order = await this.orderRepository.findOne({ where: { id } });
-    if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
-    if (updateOrderDto.status) order.status = updateOrderDto.status;
-    return this.orderRepository.save(order);
-  }
+  async update(id: string, updateOrderDto: UpdateOrderDto) { 
+  const order = await this.orderRepository.findOne({ where: { id } });
+  if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
+  
+  if (updateOrderDto.status) order.status = updateOrderDto.status;
+  return this.orderRepository.save(order);
+}
 
   async remove(id: string) {
     const order = await this.orderRepository.findOne({ where: { id } });

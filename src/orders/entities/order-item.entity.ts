@@ -8,6 +8,9 @@ export class OrderItem {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
+    @Column('text', { nullable: true })
+    selectedOptionsText: string;
+    
     @Column('int')
     quantity: number;
 
