@@ -33,22 +33,24 @@ export class OrdersService {
   ) {}
 
   async create(createOrderDto: CreateOrderDto) {
-    const { items, businessId, deliveryLat, deliveryLong, deliveryAddress, userIdTemp } = createOrderDto;
+    // ⚡ 1. Extraemos las nuevas variables de recogida
+    const { items, businessId, deliveryLat, deliveryLong, deliveryAddress, userIdTemp, pickupLat, pickupLong } = createOrderDto;
 
-    // 1. Validar existencia del Negocio
     const business = await this.businessRepository.findOne({ where: { id: businessId } });
     if (!business) throw new NotFoundException(`Negocio ${businessId} no encontrado`);
 
-    // 2. Calcular Ruta Real (Distancia + Geometría de calles)
+    // ⚡ 2. DETERMINACIÓN DEL PUNTO A: Priorizamos el mapa del usuario sobre la base de datos
+    const startLat = pickupLat ? pickupLat : business.latitude;
+    const startLng = pickupLong ? pickupLong : business.longitude;
+
+    // 3. Calcular Ruta Real con las coordenadas definitivas
     const routeData = await this.calculateRouteData(
-        business.latitude, business.longitude, 
+        startLat, startLng, 
         deliveryLat, deliveryLong
     );
 
-    // 3. Calcular Precio del Delivery basado en la distancia vial
     const deliveryFee = this.calculateDeliveryFee(routeData.distance);
 
-    // 4. Procesar Productos y Stock con Transacción
     let totalItemsPrice = 0;
     const orderItems: OrderItem[] = [];
 
@@ -72,12 +74,10 @@ export class OrdersService {
 
             totalItemsPrice += (orderItem.price * itemDto.quantity);
 
-            // Descuento de stock
             product.stock -= itemDto.quantity;
             await queryRunner.manager.save(product);
         }
 
-        // 5. Crear la Orden Maestra en BD
         const order = this.orderRepository.create({
             business,
             deliveryAddress,
@@ -93,16 +93,15 @@ export class OrdersService {
         await queryRunner.manager.save(order);
         await queryRunner.commitTransaction();
 
-        // 6. Respuesta enriquecida para el Frontend
         return { 
             orderId: order.id,
             status: 'CREATED',
             totalToPay: order.totalAmount,
             distance: `${routeData.distance.toFixed(2)} km`,
-            routePolyline: routeData.points, // <--- Lista de puntos para dibujar las calles
+            routePolyline: routeData.points, 
             businessLocation: { 
-                latitude: business.latitude, 
-                longitude: business.longitude 
+                latitude: startLat, // ⚡ Retornamos el origen real utilizado
+                longitude: startLng 
             },
             message: 'Orden creada exitosamente.' 
         };

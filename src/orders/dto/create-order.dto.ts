@@ -30,6 +30,18 @@ export class CreateOrderDto {
     @Type(() => OrderItemDto)
     items: OrderItemDto[];
 
+    @IsNumber()
+    @IsOptional()
+    pickupLat?: number;
+
+    @IsNumber()
+    @IsOptional()
+    pickupLong?: number;
+
+    @IsString()
+    @IsOptional()
+    pickupAddress?: string;
+
     // --- DATOS DEL CLIENTE Y ENTREGA ---
     @IsNumber()
     deliveryLat: number;
