@@ -10,6 +10,9 @@ export class Order {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
+    @Column({ type: 'int', generated: 'increment' })
+    orderNumber: number;
+
     // --- RELACIÓN CON EL NEGOCIO (OBLIGATORIA) ---
     @ManyToOne(() => Business, (business) => business.orders, { eager: true })
     business: Business;

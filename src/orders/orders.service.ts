@@ -11,6 +11,7 @@ import { Business } from 'src/bussines/entities/bussines.entity';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { UpdateOrderDto } from './dto/update-order.dto';
+import { GetQuoteDto } from './dto/get-quote.dto';
 
 @Injectable()
 export class OrdersService {
@@ -93,14 +94,15 @@ export class OrdersService {
         await queryRunner.manager.save(order);
         await queryRunner.commitTransaction();
 
-        return { 
-            orderId: order.id,
+       return { 
+            orderId: String(order.orderNumber).padStart(4, '0'), 
+            
             status: 'CREATED',
             totalToPay: order.totalAmount,
             distance: `${routeData.distance.toFixed(2)} km`,
             routePolyline: routeData.points, 
             businessLocation: { 
-                latitude: startLat, // ⚡ Retornamos el origen real utilizado
+                latitude: startLat, 
                 longitude: startLng 
             },
             message: 'Orden creada exitosamente.' 
@@ -113,6 +115,51 @@ export class OrdersService {
         await queryRunner.release();
     }
   }
+
+  // Coloca esta función dentro de la clase OrdersService (por ejemplo, arriba del método create)
+
+async getRouteQuote(getQuoteDto: GetQuoteDto) {
+  const { businessId, pickupLat, pickupLong, deliveryLat, deliveryLong } = getQuoteDto;
+
+  let startLat = pickupLat;
+  let startLng = pickupLong;
+
+  // ⚡ BIFURCACIÓN LÓGICA: Si NO es un cálculo libre, validamos contra la Base de Datos
+  if (businessId && businessId !== '00000000-0000-0000-0000-000000000000') {
+    const business = await this.businessRepository.findOne({ where: { id: businessId } });
+    if (!business) throw new NotFoundException(`Negocio ${businessId} no encontrado`);
+    
+    // Si no enviaron coordenadas desde el mapa, usamos las del local
+    if (!startLat) startLat = business.latitude;
+    if (!startLng) startLng = business.longitude;
+  }
+
+  // 🛡️ BARRERA DE SEGURIDAD: Garantizar que tenemos un Punto A para el cálculo
+  if (!startLat || !startLng) {
+    throw new BadRequestException('Se requiere un punto de origen válido para calcular la ruta.');
+  }
+
+  // 3. Consultar la geometría de calles a OSRM
+  const routeData = await this.calculateRouteData(
+    startLat, startLng,
+    deliveryLat, deliveryLong
+  );
+
+  // 4. Calcular tarifa vial aplicando reglas financieras
+  const deliveryFee = this.calculateDeliveryFee(routeData.distance);
+
+  // 5. Retornar payload puro de telemetría (Cero inserciones en Base de Datos)
+  return {
+    status: 'QUOTE_GENERATED',
+    distance: `${routeData.distance.toFixed(2)} km`,
+    deliveryFee: deliveryFee,
+    routePolyline: routeData.points, 
+    businessLocation: {
+      latitude: startLat,
+      longitude: startLng
+    }
+  };
+}
 
   // --- MOTOR DE RUTAS (OSRM con Geometría) ---
 
