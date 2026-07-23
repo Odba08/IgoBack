@@ -7,6 +7,7 @@ import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { Product } from 'src/products/entities/product.entity';
 import { Business } from 'src/bussines/entities/bussines.entity';
+import { User } from 'src/users/entities/user.entity';
 
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
@@ -33,7 +34,7 @@ export class OrdersService {
     private readonly httpService: HttpService, 
   ) {}
 
-  async create(createOrderDto: CreateOrderDto) {
+  async create(createOrderDto: CreateOrderDto, user?: User) {
     // ⚡ 1. Extraemos las nuevas variables de recogida
     const { items, businessId, deliveryLat, deliveryLong, deliveryAddress, userIdTemp, pickupLat, pickupLong } = createOrderDto;
 
@@ -81,6 +82,7 @@ export class OrdersService {
 
         const order = this.orderRepository.create({
             business,
+            user: user || null,
             deliveryAddress,
             deliveryLat,
             deliveryLong,
@@ -235,17 +237,26 @@ async getRouteQuote(getQuoteDto: GetQuoteDto) {
   findAll() {
     return this.orderRepository.find({ 
         order: { createdAt: 'DESC' },
+        relations: ['items', 'business', 'user']
+    });
+  }
+
+  findMyOrders(user: User) {
+    return this.orderRepository.find({
+        where: { user: { id: user.id } },
+        order: { createdAt: 'DESC' },
         relations: ['items', 'business']
     });
   }
 
   async update(id: string, updateOrderDto: UpdateOrderDto) { 
-  const order = await this.orderRepository.findOne({ where: { id } });
-  if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
-  
-  if (updateOrderDto.status) order.status = updateOrderDto.status;
-  return this.orderRepository.save(order);
-}
+    const order = await this.orderRepository.findOne({ where: { id } });
+    if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
+    
+    if (updateOrderDto.status) order.status = updateOrderDto.status;
+    if (updateOrderDto.isPaid !== undefined) order.isPaid = updateOrderDto.isPaid;
+    return this.orderRepository.save(order);
+  }
 
   async remove(id: string) {
     const order = await this.orderRepository.findOne({ where: { id } });
@@ -253,8 +264,12 @@ async getRouteQuote(getQuoteDto: GetQuoteDto) {
     return this.orderRepository.remove(order);
   }
 
-  findOne(id: string) {
-    return `This action returns a #${id} order`;
+  async findOne(id: string) {
+    const order = await this.orderRepository.findOne({ 
+      where: { id },
+      relations: ['items', 'business', 'user']
+    });
+    if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
+    return order;
   }
-
 }

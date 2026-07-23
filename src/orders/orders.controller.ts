@@ -1,8 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { GetQuoteDto } from './dto/get-quote.dto';
+import { Auth } from 'src/auth/decorators/auth.decorator';
+import { GetUser } from 'src/auth/decorators/get-user.decorator';
+import { User } from 'src/users/entities/user.entity';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('orders')
 export class OrdersController {
@@ -14,8 +18,17 @@ export class OrdersController {
   }
   
   @Post()
-  create(@Body() createOrderDto: CreateOrderDto) {
-    return this.ordersService.create(createOrderDto);
+  @UseGuards(AuthGuard(['jwt']))
+  create(@Body() createOrderDto: CreateOrderDto, @Req() req: any) {
+    // Si viene autenticado, req.user estará disponible
+    const user: User | undefined = req.user;
+    return this.ordersService.create(createOrderDto, user);
+  }
+
+  @Get('my-orders')
+  @Auth()
+  findMyOrders(@GetUser() user: User) {
+    return this.ordersService.findMyOrders(user);
   }
 
   @Get()

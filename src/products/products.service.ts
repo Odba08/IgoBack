@@ -61,6 +61,7 @@ export class ProductsService {
   async findAll(paginationDto: PaginationDto) {
     const { limit = 10, offset = 0 } = paginationDto;
     const products = await this.productRepository.find({
+      where: { isApproved: true },
       take: limit,
       skip: offset,
       relations: { images: true },

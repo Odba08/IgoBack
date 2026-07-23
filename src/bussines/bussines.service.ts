@@ -88,6 +88,11 @@ export class BussinessService {
     if (!business) {
       throw new NotFoundException(`Business with id ${id} not found`);
     }
+
+    if (business.products) {
+      business.products = business.products.filter(product => product.isApproved);
+    }
+
     return business;
   }
 

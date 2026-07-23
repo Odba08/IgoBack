@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
 
 @Injectable()
@@ -29,12 +30,39 @@ export class UsersService {
     }
   }
 
+  findAll() {
+    return this.userRepository.find();
+  }
+
+  async findOne(id: string) {
+    const user = await this.userRepository.findOneBy({ id });
+    if (!user) throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
+    return user;
+  }
+
   async findOneByEmail(email: string) {
     return this.userRepository.createQueryBuilder('user')
       .where('user.email = :email', { email })
       .addSelect('user.password') 
       .getOne(); 
+  }
+
+  async update(id: string, updateUserDto: UpdateUserDto) {
+    const user = await this.userRepository.preload({
+      id,
+      ...updateUserDto,
+    });
+
+    if (!user) throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
+
+    try {
+      await this.userRepository.save(user);
+      delete user.password;
+      return user;
+    } catch (error) {
+      this.handleDBErrors(error);
     }
+  }
 
   // Método privado para centralizar errores
   private handleDBErrors(error: any): never {

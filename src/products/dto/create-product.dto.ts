@@ -21,6 +21,11 @@ export class ProductOptionDto{
     @Min(1)
     maxAllowed: number;
 
+    // --- LA VARIABLE TÁCTICA QUE FALTA EN TU CÓDIGO ---
+    @IsBoolean()
+    @IsOptional()
+    allowRepeated?: boolean;
+
     @IsArray()
     @ValidateNested({ each: true })
     @Type(() => OptionChoiceDto)

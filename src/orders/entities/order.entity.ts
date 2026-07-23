@@ -1,7 +1,7 @@
 import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { OrderStatus } from '../enums/order-status.enum';
 import { Business } from 'src/bussines/entities/bussines.entity';
-// import { User } from 'src/auth/entities/user.entity'; // <-- DESCOMENTAR CUANDO TENGAMOS AUTH
+import { User } from 'src/users/entities/user.entity';
 import { OrderItem } from './order-item.entity';
 
 @Entity('orders')
@@ -17,11 +17,12 @@ export class Order {
     @ManyToOne(() => Business, (business) => business.orders, { eager: true })
     business: Business;
 
-    // --- RELACIÓN CON EL USUARIO (PENDIENTE FASE AUTH) ---
-    // @ManyToOne(() => User, (user) => user.orders)
-    // user: User; 
+    // --- RELACIÓN CON EL USUARIO ---
+    @ManyToOne(() => User, (user) => user.orders, { eager: true, nullable: true })
+    user: User;
+
     @Column('text', { nullable: true }) 
-    userIdTemp: string; // <-- Placeholder temporal hasta que hagamos el Auth
+    userIdTemp: string;
 
     // --- ESTADO DEL PEDIDO ---
     @Column({
@@ -30,6 +31,9 @@ export class Order {
         default: OrderStatus.PENDING
     })
     status: OrderStatus;
+
+    @Column('boolean', { default: false })
+    isPaid: boolean;
 
     // --- INFORMACIÓN DE ENTREGA (GEOLOCALIZACIÓN) ---
     @Column('float', { nullable: true })

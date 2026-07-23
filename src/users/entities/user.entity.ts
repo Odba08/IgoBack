@@ -1,5 +1,6 @@
-import { BeforeInsert, BeforeUpdate, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { BeforeInsert, BeforeUpdate, Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { Order } from 'src/orders/entities/order.entity';
 
 @Entity('users')
 export class User {
@@ -29,6 +30,9 @@ export class User {
     default: true,
   })
   isActive: boolean;
+
+  @OneToMany(() => Order, (order) => order.user)
+  orders: Order[];
 
   // --- Hooks Criptográficos ---
   // Este método asegura que la contraseña jamás se guarde en texto plano

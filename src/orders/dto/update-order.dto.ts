@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
 import { OrderStatus } from '../enums/order-status.enum';
 
 export class UpdateOrderDto {
@@ -7,4 +7,8 @@ export class UpdateOrderDto {
   })
   @IsOptional()
   status?: OrderStatus;
+
+  @IsBoolean()
+  @IsOptional()
+  isPaid?: boolean;
 }
