@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, IsNumber } from 'class-validator';
 import { OrderStatus } from '../enums/order-status.enum';
 
 export class UpdateOrderDto {
@@ -11,4 +11,44 @@ export class UpdateOrderDto {
   @IsBoolean()
   @IsOptional()
   isPaid?: boolean;
+
+  @IsString()
+  @IsOptional()
+  deliveryUserId?: string;
+
+  @IsString()
+  @IsOptional()
+  category?: string;
+
+  @IsString()
+  @IsOptional()
+  shippingType?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentRecipient?: string;
+
+  @IsString()
+  @IsOptional()
+  deliveryAddress?: string;
+
+  @IsNumber()
+  @IsOptional()
+  deliveryLat?: number;
+
+  @IsNumber()
+  @IsOptional()
+  deliveryLong?: number;
+
+  @IsNumber()
+  @IsOptional()
+  totalItems?: number;
+
+  @IsNumber()
+  @IsOptional()
+  deliveryFee?: number;
+
+  @IsNumber()
+  @IsOptional()
+  totalAmount?: number;
 }

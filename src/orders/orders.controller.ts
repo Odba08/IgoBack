@@ -31,6 +31,12 @@ export class OrdersController {
     return this.ordersService.findMyOrders(user);
   }
 
+  @Get('pending-deliveries')
+  @Auth()
+  findPendingDeliveries(@GetUser() user: User) {
+    return this.ordersService.findPendingDeliveries(user);
+  }
+
   @Get()
   findAll() {
     return this.ordersService.findAll();

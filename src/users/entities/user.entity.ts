@@ -31,6 +31,21 @@ export class User {
   })
   isActive: boolean;
 
+  @Column('text', {
+    default: 'inactive', // 'active' | 'inactive' | 'break'
+  })
+  employeeStatus: string;
+
+  @Column('text', {
+    nullable: true,
+  })
+  vehicle: string; // 'Bicicleta' | 'Moto' | 'Carro' | 'Pickups'
+
+  @Column('text', {
+    nullable: true,
+  })
+  avatarUrl: string;
+
   @OneToMany(() => Order, (order) => order.user)
   orders: Order[];
 

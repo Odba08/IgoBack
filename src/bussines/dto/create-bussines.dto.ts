@@ -30,5 +30,13 @@ export class CreateBusinessDto {
     @IsOptional()
     closeTime?: string;
 
+    @IsNumber()
+    @IsOptional()
+    commissionPercentage?: number;
+
+    @IsString()
+    @IsUUID()
+    @IsOptional()
+    ownerId?: string;
     
 }

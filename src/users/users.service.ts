@@ -64,6 +64,12 @@ export class UsersService {
     }
   }
 
+  async remove(id: string) {
+    const user = await this.findOne(id);
+    await this.userRepository.remove(user);
+    return { deleted: true };
+  }
+
   // Método privado para centralizar errores
   private handleDBErrors(error: any): never {
     // 23505 es el código de error de PostgreSQL para "Unique Violation" (correo duplicado)

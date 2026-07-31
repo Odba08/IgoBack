@@ -1,10 +1,10 @@
-import { BadRequestException, Controller,Get,Param,Post, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Controller,Get,Param,Post, Res, UploadedFile, UseInterceptors, Req } from '@nestjs/common';
 import { FilesService } from './files.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { fileFilter } from './helpers/fileFilter.helper';
 import { diskStorage } from 'multer';
 import { fileNamer } from './helpers/fileNamer.helper';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 
 
@@ -54,16 +54,15 @@ export class FilesController {
     })
   }))
   uploadFile(
-    @UploadedFile()  file: Express.Multer.File
-    
+    @UploadedFile()  file: Express.Multer.File,
+    @Req() req: Request
   ){
     if(!file){
     throw new BadRequestException('No file uploaded')
     }
 
-   /*  const secureUrl= `${file.filename}`; */
-
-    const secureUrl = `${this.configService.get('HOST_API')}/files/products/${file.filename}`
+    const hostApi = this.configService.get('HOST_API') || `${req.protocol}://${req.get('host')}/api`;
+    const secureUrl = `${hostApi}/files/products/${file.filename}`;
 
     return {
      secureUrl 
@@ -79,12 +78,14 @@ export class FilesController {
     })
   }))
   uploadUserFile(
-    @UploadedFile() file: Express.Multer.File
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: Request
   ){
     if(!file){
       throw new BadRequestException('No file uploaded')
     }
-    const secureUrl = `${this.configService.get('HOST_API')}/files/user/${file.filename}`
+    const hostApi = this.configService.get('HOST_API') || `${req.protocol}://${req.get('host')}/api`;
+    const secureUrl = `${hostApi}/files/user/${file.filename}`;
     return {
       secureUrl
     }
@@ -99,15 +100,15 @@ export class FilesController {
     })
   }))
   uploadFilenuevo(
-    @UploadedFile()  file: Express.Multer.File
-    
+    @UploadedFile()  file: Express.Multer.File,
+    @Req() req: Request
   ){
     if(!file){
     throw new BadRequestException('No file uploaded')
     }
 
-
-    const secureUrl = `${this.configService.get('HOST_API')}/files/bussines/${file.filename}`
+    const hostApi = this.configService.get('HOST_API') || `${req.protocol}://${req.get('host')}/api`;
+    const secureUrl = `${hostApi}/files/bussiness/${file.filename}`;
 
     return {
      secureUrl 

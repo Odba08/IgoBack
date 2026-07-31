@@ -283,6 +283,18 @@ export class BussinessService {
     return { message: `Product ${productId} removed successfully` };
   }
 
+  async findBusinessByOwner(ownerId: string): Promise<Business | null> {
+    return this.businessRepository.findOne({
+      where: { ownerId },
+      relations: [
+        'images',
+        'category',
+        'products',
+        'products.menuCategory'
+      ],
+    });
+  }
+
   // ================== UTILS ==================
 
   private handleDBExceptions(error: any) {

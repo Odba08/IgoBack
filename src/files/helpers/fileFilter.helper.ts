@@ -3,13 +3,14 @@ export const fileFilter = (req: Express.Request, file: Express.Multer.File, call
 
     if (!file) return callback(new Error('No file uploaded'), false);
 
-    const fileExtension = file.mimetype.split('/')[1];
-    const validExtensios = ['jpg', 'jpeg', 'png', 'gif'];
+    const fileExtension = file.mimetype.split('/')[1]?.toLowerCase();
+    const originalExtension = file.originalname.split('.').pop()?.toLowerCase();
+    
+    const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'svg+xml', 'bmp'];
 
-    if (validExtensios.includes(fileExtension) ){ 
+    if (validExtensions.includes(fileExtension) || (originalExtension && validExtensions.includes(originalExtension))) { 
         return callback(null, true)
     }
 
     callback(null, false)
-
 }

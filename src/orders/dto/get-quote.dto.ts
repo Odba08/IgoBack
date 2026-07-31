@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsUUID } from 'class-validator';
+import { IsNumber, IsOptional, IsUUID, IsString } from 'class-validator';
 
 export class GetQuoteDto {
   @IsUUID()
@@ -19,4 +19,8 @@ export class GetQuoteDto {
 
   @IsNumber()
   deliveryLong: number;
+
+  @IsString()
+  @IsOptional()
+  shippingType?: string;
 }

@@ -18,4 +18,12 @@ export class CreateUserDto {
   @IsString({ each: true })
   @IsOptional()
   roles?: string[];
+
+  @IsString()
+  @IsOptional()
+  vehicle?: string;
+
+  @IsString()
+  @IsOptional()
+  avatarUrl?: string;
 }

@@ -18,11 +18,23 @@ export class Order {
     business: Business;
 
     // --- RELACIÓN CON EL USUARIO ---
-    @ManyToOne(() => User, (user) => user.orders, { eager: true, nullable: true })
-    user: User;
+    @ManyToOne(() => User, (user) => user.orders, { eager: true, nullable: true, onDelete: 'SET NULL' })
+    user?: User | null;
+
+    @ManyToOne(() => User, { eager: true, nullable: true, onDelete: 'SET NULL' })
+    deliveryUser?: User | null;
 
     @Column('text', { nullable: true }) 
     userIdTemp: string;
+
+    @Column('text', { default: 'Comida' })
+    category: string; // 'Comida' | 'Mercado' | 'Compras' | 'Envíos' | 'Salud'
+
+    @Column('text', { default: 'Moto' })
+    shippingType: string; // 'Moto' | 'Carro' | 'Pickup'
+
+    @Column('text', { default: 'Pago IGO' })
+    paymentRecipient: string; // 'Pago Negocio' | 'Pago IGO' | 'Mix'
 
     // --- ESTADO DEL PEDIDO ---
     @Column({

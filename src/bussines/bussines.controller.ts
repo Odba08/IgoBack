@@ -33,6 +33,11 @@ export class BusinessController {
     return this.bussinessService.findAllBusiness(paginationDto);
   }
 
+  @Get('owner/:ownerId')
+  findBusinessByOwner(@Param('ownerId') ownerId: string) {
+    return this.bussinessService.findBusinessByOwner(ownerId);
+  }
+
   @Get(':id')
   findBusinessById(@Param('id', ParseUUIDPipe) id: string) {
     return this.bussinessService.findBusinessById(id);

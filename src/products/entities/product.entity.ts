@@ -86,7 +86,7 @@ export class Product {
     menuCategory: MenuCategory;
 
     // Relación Antigua Directa con Negocio. Se queda por compatibilidad.
-    @ManyToOne(() => Business, (business) => business.products, { eager: true })
+    @ManyToOne(() => Business, (business) => business.products, { eager: true, onDelete: 'CASCADE' })
     @JoinColumn({ name: 'business_id' })
     business: Business;
 

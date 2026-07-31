@@ -46,6 +46,12 @@ export class Business {
     @Column('text', { nullable: true })
     closeTime: string;
 
+    @Column('float', { default: 10.0 })
+    commissionPercentage: number;
+
+    @Column('text', { nullable: true })
+    ownerId: string;
+
     @OneToMany(() => Order, (order) => order.business)
     orders: Order[];
 

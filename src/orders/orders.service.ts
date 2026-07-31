@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, IsNull } from 'typeorm';
 
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Order } from './entities/order.entity';
@@ -30,13 +30,16 @@ export class OrdersService {
     @InjectRepository(Business)
     private readonly businessRepository: Repository<Business>,
 
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+
     private readonly dataSource: DataSource,
     private readonly httpService: HttpService, 
   ) {}
 
   async create(createOrderDto: CreateOrderDto, user?: User) {
     // ⚡ 1. Extraemos las nuevas variables de recogida
-    const { items, businessId, deliveryLat, deliveryLong, deliveryAddress, userIdTemp, pickupLat, pickupLong } = createOrderDto;
+    const { items, businessId, deliveryLat, deliveryLong, deliveryAddress, userIdTemp, pickupLat, pickupLong, category, shippingType, paymentRecipient } = createOrderDto;
 
     const business = await this.businessRepository.findOne({ where: { id: businessId } });
     if (!business) throw new NotFoundException(`Negocio ${businessId} no encontrado`);
@@ -51,7 +54,7 @@ export class OrdersService {
         deliveryLat, deliveryLong
     );
 
-    const deliveryFee = this.calculateDeliveryFee(routeData.distance);
+    const deliveryFee = this.calculateDeliveryFee(routeData.distance, shippingType || 'Moto');
 
     let totalItemsPrice = 0;
     const orderItems: OrderItem[] = [];
@@ -69,7 +72,8 @@ export class OrdersService {
 
             const orderItem = this.orderItemRepository.create({
                 quantity: itemDto.quantity,
-                price: product.isPromo ? product.discountPrice : product.price,
+                price: itemDto.finalUnitPrice,
+                selectedOptionsText: itemDto.selectedOptionsText || 'Sin adicionales',
                 product: product
             });
             orderItems.push(orderItem);
@@ -78,6 +82,21 @@ export class OrdersService {
 
             product.stock -= itemDto.quantity;
             await queryRunner.manager.save(product);
+        }
+
+        // Autodetectar la categoría de pedido a partir del negocio (SIEMPRE se sobreescribe desde el negocio para evitar que los usuarios la falseen)
+        let finalCategory = 'Compras';
+        if (business.category) {
+          const catName = business.category.name.toLowerCase();
+          if (catName.includes('comida') || catName.includes('hamburguesa') || catName.includes('restaurante') || catName.includes('pizza') || catName.includes('sushi') || catName.includes('cafe')) {
+            finalCategory = 'Comida';
+          } else if (catName.includes('farmacia') || catName.includes('salud') || catName.includes('medica')) {
+            finalCategory = 'Salud';
+          } else if (catName.includes('supermercado') || catName.includes('mercado') || catName.includes('bodega')) {
+            finalCategory = 'Mercado';
+          } else if (catName.includes('envio') || catName.includes('delivery') || catName.includes('mensajeria')) {
+            finalCategory = 'Envíos';
+          }
         }
 
         const order = this.orderRepository.create({
@@ -90,7 +109,10 @@ export class OrdersService {
             items: orderItems,
             totalItems: totalItemsPrice,
             deliveryFee: deliveryFee,
-            totalAmount: totalItemsPrice + deliveryFee
+            totalAmount: totalItemsPrice + deliveryFee,
+            category: finalCategory,
+            shippingType: shippingType || 'Moto',
+            paymentRecipient: paymentRecipient || 'Pago IGO'
         });
 
         await queryRunner.manager.save(order);
@@ -120,48 +142,48 @@ export class OrdersService {
 
   // Coloca esta función dentro de la clase OrdersService (por ejemplo, arriba del método create)
 
-async getRouteQuote(getQuoteDto: GetQuoteDto) {
-  const { businessId, pickupLat, pickupLong, deliveryLat, deliveryLong } = getQuoteDto;
+  async getRouteQuote(getQuoteDto: GetQuoteDto) {
+    const { businessId, pickupLat, pickupLong, deliveryLat, deliveryLong, shippingType } = getQuoteDto;
 
-  let startLat = pickupLat;
-  let startLng = pickupLong;
+    let startLat = pickupLat;
+    let startLng = pickupLong;
 
-  // ⚡ BIFURCACIÓN LÓGICA: Si NO es un cálculo libre, validamos contra la Base de Datos
-  if (businessId && businessId !== '00000000-0000-0000-0000-000000000000') {
-    const business = await this.businessRepository.findOne({ where: { id: businessId } });
-    if (!business) throw new NotFoundException(`Negocio ${businessId} no encontrado`);
-    
-    // Si no enviaron coordenadas desde el mapa, usamos las del local
-    if (!startLat) startLat = business.latitude;
-    if (!startLng) startLng = business.longitude;
-  }
-
-  // 🛡️ BARRERA DE SEGURIDAD: Garantizar que tenemos un Punto A para el cálculo
-  if (!startLat || !startLng) {
-    throw new BadRequestException('Se requiere un punto de origen válido para calcular la ruta.');
-  }
-
-  // 3. Consultar la geometría de calles a OSRM
-  const routeData = await this.calculateRouteData(
-    startLat, startLng,
-    deliveryLat, deliveryLong
-  );
-
-  // 4. Calcular tarifa vial aplicando reglas financieras
-  const deliveryFee = this.calculateDeliveryFee(routeData.distance);
-
-  // 5. Retornar payload puro de telemetría (Cero inserciones en Base de Datos)
-  return {
-    status: 'QUOTE_GENERATED',
-    distance: `${routeData.distance.toFixed(2)} km`,
-    deliveryFee: deliveryFee,
-    routePolyline: routeData.points, 
-    businessLocation: {
-      latitude: startLat,
-      longitude: startLng
+    // ⚡ BIFURCACIÓN LÓGICA: Si NO es un cálculo libre, validamos contra la Base de Datos
+    if (businessId && businessId !== '00000000-0000-0000-0000-000000000000') {
+      const business = await this.businessRepository.findOne({ where: { id: businessId } });
+      if (!business) throw new NotFoundException(`Negocio ${businessId} no encontrado`);
+      
+      // Si no enviaron coordenadas desde el mapa, usamos las del local
+      if (!startLat) startLat = business.latitude;
+      if (!startLng) startLng = business.longitude;
     }
-  };
-}
+
+    // 🛡️ BARRERA DE SEGURIDAD: Garantizar que tenemos un Punto A para el cálculo
+    if (!startLat || !startLng) {
+      throw new BadRequestException('Se requiere un punto de origen válido para calcular la ruta.');
+    }
+
+    // 3. Consultar la geometría de calles a OSRM
+    const routeData = await this.calculateRouteData(
+      startLat, startLng,
+      deliveryLat, deliveryLong
+    );
+
+    // 4. Calcular tarifa vial aplicando reglas financieras
+    const deliveryFee = this.calculateDeliveryFee(routeData.distance, shippingType || 'Moto');
+
+    // 5. Retornar payload puro de telemetría (Cero inserciones en Base de Datos)
+    return {
+      status: 'QUOTE_GENERATED',
+      distance: `${routeData.distance.toFixed(2)} km`,
+      deliveryFee: deliveryFee,
+      routePolyline: routeData.points, 
+      businessLocation: {
+        latitude: startLat,
+        longitude: startLng
+      }
+    };
+  }
 
   // --- MOTOR DE RUTAS (OSRM con Geometría) ---
 
@@ -215,7 +237,7 @@ async getRouteQuote(getQuoteDto: GetQuoteDto) {
     return R * c;
   }
 
-  private calculateDeliveryFee(distanceKm: number): number {
+  private calculateDeliveryFee(distanceKm: number, shippingType: string = 'Moto'): number {
     const BASE_FEE = 3.00;
     const FREE_KM_LIMIT = 3;
     const PRICE_PER_KM = 1.00;
@@ -229,6 +251,13 @@ async getRouteQuote(getQuoteDto: GetQuoteDto) {
     const hour = new Date().getHours();
     if (hour >= 22 || hour < 6) fee *= 1.5;
 
+    // Recargo por tipo de envío
+    if (shippingType === 'Carro') {
+      fee += 3.00;
+    } else if (shippingType === 'Pickup') {
+      fee += 7.00;
+    }
+
     return parseFloat(fee.toFixed(2));
   }
 
@@ -237,7 +266,31 @@ async getRouteQuote(getQuoteDto: GetQuoteDto) {
   findAll() {
     return this.orderRepository.find({ 
         order: { createdAt: 'DESC' },
-        relations: ['items', 'business', 'user']
+        relations: ['items', 'business', 'user', 'deliveryUser']
+    });
+  }
+
+  findPendingDeliveries(user?: User) {
+    const whereClause: any = {
+      deliveryUser: IsNull(),
+      isPaid: true
+    };
+
+    if (user && (user.roles.includes('empleado') || user.roles.includes('worker'))) {
+      const vehicle = user.vehicle || 'Moto';
+      if (vehicle === 'Carro') {
+        whereClause.shippingType = 'Carro';
+      } else if (vehicle === 'Pickups') {
+        whereClause.shippingType = 'Pickup';
+      } else {
+        whereClause.shippingType = 'Moto';
+      }
+    }
+
+    return this.orderRepository.find({
+      where: whereClause,
+      order: { createdAt: 'DESC' },
+      relations: ['items', 'business', 'user']
     });
   }
 
@@ -245,16 +298,53 @@ async getRouteQuote(getQuoteDto: GetQuoteDto) {
     return this.orderRepository.find({
         where: { user: { id: user.id } },
         order: { createdAt: 'DESC' },
-        relations: ['items', 'business']
+        relations: ['items', 'business', 'deliveryUser']
     });
   }
 
   async update(id: string, updateOrderDto: UpdateOrderDto) { 
-    const order = await this.orderRepository.findOne({ where: { id } });
+    const order = await this.orderRepository.findOne({ 
+      where: { id },
+      relations: ['items', 'business', 'user', 'deliveryUser'] 
+    });
     if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
     
     if (updateOrderDto.status) order.status = updateOrderDto.status;
     if (updateOrderDto.isPaid !== undefined) order.isPaid = updateOrderDto.isPaid;
+    if (updateOrderDto.category) order.category = updateOrderDto.category;
+    if (updateOrderDto.shippingType) order.shippingType = updateOrderDto.shippingType;
+    if (updateOrderDto.paymentRecipient) order.paymentRecipient = updateOrderDto.paymentRecipient;
+    if (updateOrderDto.deliveryAddress) order.deliveryAddress = updateOrderDto.deliveryAddress;
+    if (updateOrderDto.deliveryLat !== undefined) order.deliveryLat = updateOrderDto.deliveryLat;
+    if (updateOrderDto.deliveryLong !== undefined) order.deliveryLong = updateOrderDto.deliveryLong;
+    if (updateOrderDto.totalItems !== undefined) order.totalItems = updateOrderDto.totalItems;
+    if (updateOrderDto.deliveryFee !== undefined) order.deliveryFee = updateOrderDto.deliveryFee;
+    if (updateOrderDto.totalAmount !== undefined) order.totalAmount = updateOrderDto.totalAmount;
+    
+    if (updateOrderDto.deliveryUserId !== undefined) {
+      if (updateOrderDto.deliveryUserId === null) {
+        order.deliveryUser = null;
+      } else {
+        const user = await this.userRepository.findOne({ where: { id: updateOrderDto.deliveryUserId } });
+        if (!user) throw new NotFoundException(`Usuario motorizado ${updateOrderDto.deliveryUserId} no encontrado`);
+        
+        // Validar compatibilidad de vehículo
+        const isDriver = user.roles.includes('empleado') || user.roles.includes('worker');
+        if (isDriver) {
+          const driverVehicle = user.vehicle || 'Moto';
+          const orderShipping = order.shippingType || 'Moto';
+          
+          if (orderShipping === 'Carro' && !['Carro', 'Pickups'].includes(driverVehicle)) {
+            throw new BadRequestException(`Este pedido requiere Carro o Pickup. Tu vehículo actual es ${driverVehicle}.`);
+          }
+          if (orderShipping === 'Pickup' && driverVehicle !== 'Pickups') {
+            throw new BadRequestException(`Este pedido requiere un vehículo tipo Pickup. Tu vehículo actual es ${driverVehicle}.`);
+          }
+        }
+        order.deliveryUser = user;
+      }
+    }
+    
     return this.orderRepository.save(order);
   }
 
@@ -267,7 +357,7 @@ async getRouteQuote(getQuoteDto: GetQuoteDto) {
   async findOne(id: string) {
     const order = await this.orderRepository.findOne({ 
       where: { id },
-      relations: ['items', 'business', 'user']
+      relations: ['items', 'business', 'user', 'deliveryUser']
     });
     if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
     return order;

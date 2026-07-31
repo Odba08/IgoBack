@@ -55,4 +55,16 @@ export class CreateOrderDto {
     @IsString()
     @IsOptional()
     userIdTemp?: string; // ID temporal del usuario (hasta tener Auth)
+
+    @IsString()
+    @IsOptional()
+    category?: string;
+
+    @IsString()
+    @IsOptional()
+    shippingType?: string;
+
+    @IsString()
+    @IsOptional()
+    paymentRecipient?: string;
 }

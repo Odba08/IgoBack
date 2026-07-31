@@ -26,9 +26,11 @@ async login (loginUserDto: LoginUserDto) {
       id : user.id,
       email : user.email,
       fullname : user.fullName,
-      roles : user.roles},
-      token : this.jwtService.sign({id : user.id})
-    };
+      roles : user.roles,
+      avatarUrl: user.avatarUrl
+    },
+    token : this.jwtService.sign({id : user.id})
+  };
   }
 }
 

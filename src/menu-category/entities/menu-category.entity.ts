@@ -13,7 +13,7 @@ export class MenuCategory {
     @OneToMany(() => Product, (product) => product.menuCategory)
     products: Product[];
 
-    @ManyToOne(() => Business, (business) => business.category)
+    @ManyToOne(() => Business, (business) => business.category, { onDelete: 'CASCADE' })
     business: Business;
 
 }
