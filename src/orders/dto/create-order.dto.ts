@@ -1,4 +1,4 @@
-import { IsArray, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Clase auxiliar para validar cada item del carrito
@@ -22,7 +22,8 @@ export class CreateOrderDto {
 
     @IsString()
     @IsUUID()
-    businessId: string;
+    @IsOptional()
+    businessId?: string;
 
     // Validamos que sea un arreglo de objetos OrderItemDto
     @IsArray()
@@ -67,4 +68,16 @@ export class CreateOrderDto {
     @IsString()
     @IsOptional()
     paymentRecipient?: string;
+
+    @IsNumber()
+    @IsOptional()
+    packageValue?: number;
+
+    @IsString()
+    @IsOptional()
+    packageSize?: string;
+
+    @IsBoolean()
+    @IsOptional()
+    isInsured?: boolean;
 }

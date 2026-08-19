@@ -12,9 +12,8 @@ export class UpdateOrderDto {
   @IsOptional()
   isPaid?: boolean;
 
-  @IsString()
   @IsOptional()
-  deliveryUserId?: string;
+  deliveryUserId?: string | null;
 
   @IsString()
   @IsOptional()
@@ -51,4 +50,20 @@ export class UpdateOrderDto {
   @IsNumber()
   @IsOptional()
   totalAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  photoUrl?: string;
+
+  @IsNumber()
+  @IsOptional()
+  packageValue?: number;
+
+  @IsString()
+  @IsOptional()
+  packageSize?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isInsured?: boolean;
 }

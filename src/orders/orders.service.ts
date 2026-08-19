@@ -13,6 +13,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { GetQuoteDto } from './dto/get-quote.dto';
+import { OrderStatus } from './enums/order-status.enum';
 
 @Injectable()
 export class OrdersService {
@@ -39,14 +40,23 @@ export class OrdersService {
 
   async create(createOrderDto: CreateOrderDto, user?: User) {
     // ⚡ 1. Extraemos las nuevas variables de recogida
-    const { items, businessId, deliveryLat, deliveryLong, deliveryAddress, userIdTemp, pickupLat, pickupLong, category, shippingType, paymentRecipient } = createOrderDto;
+    const { items, businessId, deliveryLat, deliveryLong, deliveryAddress, userIdTemp, pickupLat, pickupLong, category, shippingType, paymentRecipient, packageValue, packageSize, isInsured } = createOrderDto;
 
-    const business = await this.businessRepository.findOne({ where: { id: businessId } });
-    if (!business) throw new NotFoundException(`Negocio ${businessId} no encontrado`);
+    const isFavorOrTaxi = category === 'IgoFavor' || category === 'IgoTaxi' || !businessId || businessId === '00000000-0000-0000-0000-000000000000';
+
+    let business = null;
+    if (businessId && businessId !== '00000000-0000-0000-0000-000000000000') {
+      business = await this.businessRepository.findOne({ where: { id: businessId } });
+      if (!business && !isFavorOrTaxi) throw new NotFoundException(`Negocio ${businessId} no encontrado`);
+    }
 
     // ⚡ 2. DETERMINACIÓN DEL PUNTO A: Priorizamos el mapa del usuario sobre la base de datos
-    const startLat = pickupLat ? pickupLat : business.latitude;
-    const startLng = pickupLong ? pickupLong : business.longitude;
+    const startLat = pickupLat ? pickupLat : (business ? business.latitude : null);
+    const startLng = pickupLong ? pickupLong : (business ? business.longitude : null);
+
+    if (startLat === null || startLng === null || startLat === undefined || startLng === undefined) {
+      throw new BadRequestException('Se requiere un punto de origen válido para calcular la ruta.');
+    }
 
     // 3. Calcular Ruta Real con las coordenadas definitivas
     const routeData = await this.calculateRouteData(
@@ -54,7 +64,54 @@ export class OrdersService {
         deliveryLat, deliveryLong
     );
 
-    const deliveryFee = this.calculateDeliveryFee(routeData.distance, shippingType || 'Moto');
+    const deliveryFee = this.calculateDeliveryFee(
+      routeData.distance, 
+      shippingType || 'Moto',
+      category,
+      packageValue,
+      packageSize,
+      isInsured
+    );
+
+    // ⚡ BIFURCACIÓN: Si no hay items (Favor/Taxi), se guarda la orden de manera simplificada
+    if (!items || items.length === 0) {
+      const order = this.orderRepository.create({
+          business,
+          user: user || null,
+          pickupLat: startLat,
+          pickupLong: startLng,
+          pickupAddress: createOrderDto.pickupAddress || 'Dirección de Recogida',
+          deliveryAddress,
+          deliveryLat,
+          deliveryLong,
+          userIdTemp,
+          items: [],
+          totalItems: 0,
+          deliveryFee: deliveryFee,
+          totalAmount: deliveryFee,
+          category: category || 'Envíos',
+          shippingType: shippingType || 'Moto',
+          paymentRecipient: paymentRecipient || 'Pago IGO',
+          packageValue,
+          packageSize,
+          isInsured: isInsured || false
+      });
+
+      await this.orderRepository.save(order);
+
+      return { 
+          orderId: String(order.orderNumber).padStart(4, '0'), 
+          status: 'CREATED',
+          totalToPay: order.totalAmount,
+          distance: `${routeData.distance.toFixed(2)} km`,
+          routePolyline: routeData.points, 
+          businessLocation: { 
+              latitude: startLat, 
+              longitude: startLng 
+          },
+          message: 'Orden creada exitosamente.' 
+      };
+    }
 
     let totalItemsPrice = 0;
     const orderItems: OrderItem[] = [];
@@ -86,7 +143,7 @@ export class OrdersService {
 
         // Autodetectar la categoría de pedido a partir del negocio (SIEMPRE se sobreescribe desde el negocio para evitar que los usuarios la falseen)
         let finalCategory = 'Compras';
-        if (business.category) {
+        if (business && business.category) {
           const catName = business.category.name.toLowerCase();
           if (catName.includes('comida') || catName.includes('hamburguesa') || catName.includes('restaurante') || catName.includes('pizza') || catName.includes('sushi') || catName.includes('cafe')) {
             finalCategory = 'Comida';
@@ -97,11 +154,16 @@ export class OrdersService {
           } else if (catName.includes('envio') || catName.includes('delivery') || catName.includes('mensajeria')) {
             finalCategory = 'Envíos';
           }
+        } else {
+          finalCategory = category || 'Compras';
         }
 
         const order = this.orderRepository.create({
             business,
             user: user || null,
+            pickupLat: startLat,
+            pickupLong: startLng,
+            pickupAddress: createOrderDto.pickupAddress || (business ? business.name : 'Dirección de Recogida'),
             deliveryAddress,
             deliveryLat,
             deliveryLong,
@@ -112,7 +174,10 @@ export class OrdersService {
             totalAmount: totalItemsPrice + deliveryFee,
             category: finalCategory,
             shippingType: shippingType || 'Moto',
-            paymentRecipient: paymentRecipient || 'Pago IGO'
+            paymentRecipient: paymentRecipient || 'Pago IGO',
+            packageValue,
+            packageSize,
+            isInsured: isInsured || false
         });
 
         await queryRunner.manager.save(order);
@@ -120,7 +185,6 @@ export class OrdersService {
 
        return { 
             orderId: String(order.orderNumber).padStart(4, '0'), 
-            
             status: 'CREATED',
             totalToPay: order.totalAmount,
             distance: `${routeData.distance.toFixed(2)} km`,
@@ -143,7 +207,7 @@ export class OrdersService {
   // Coloca esta función dentro de la clase OrdersService (por ejemplo, arriba del método create)
 
   async getRouteQuote(getQuoteDto: GetQuoteDto) {
-    const { businessId, pickupLat, pickupLong, deliveryLat, deliveryLong, shippingType } = getQuoteDto;
+    const { businessId, pickupLat, pickupLong, deliveryLat, deliveryLong, shippingType, category, packageValue, packageSize, isInsured } = getQuoteDto;
 
     let startLat = pickupLat;
     let startLng = pickupLong;
@@ -170,7 +234,14 @@ export class OrdersService {
     );
 
     // 4. Calcular tarifa vial aplicando reglas financieras
-    const deliveryFee = this.calculateDeliveryFee(routeData.distance, shippingType || 'Moto');
+    const deliveryFee = this.calculateDeliveryFee(
+      routeData.distance, 
+      shippingType || 'Moto',
+      category,
+      packageValue,
+      packageSize,
+      isInsured
+    );
 
     // 5. Retornar payload puro de telemetría (Cero inserciones en Base de Datos)
     return {
@@ -237,7 +308,14 @@ export class OrdersService {
     return R * c;
   }
 
-  private calculateDeliveryFee(distanceKm: number, shippingType: string = 'Moto'): number {
+  private calculateDeliveryFee(
+    distanceKm: number, 
+    shippingType: string = 'Moto',
+    category?: string,
+    packageValue?: number,
+    packageSize?: string,
+    isInsured: boolean = false
+  ): number {
     const BASE_FEE = 3.00;
     const FREE_KM_LIMIT = 3;
     const PRICE_PER_KM = 1.00;
@@ -258,6 +336,26 @@ export class OrdersService {
       fee += 7.00;
     }
 
+    // Recargos específicos de IgoFavor (Peso/Tamaño y Valor del Paquete)
+    if (category === 'IgoFavor') {
+      // 1. Fee por tamaño/peso
+      if (packageSize === 'mediano') {
+        fee += 2.00;
+      } else if (packageSize === 'grande') {
+        fee += 5.00;
+      }
+      
+      // 2. Fee del 5% si el valor del paquete >= 100
+      if (packageValue && packageValue >= 100) {
+        fee += packageValue * 0.05;
+      }
+
+      // 3. Seguro del paquete (2% del valor si se selecciona asegurar)
+      if (isInsured && packageValue) {
+        fee += packageValue * 0.02;
+      }
+    }
+
     return parseFloat(fee.toFixed(2));
   }
 
@@ -270,7 +368,7 @@ export class OrdersService {
     });
   }
 
-  findPendingDeliveries(user?: User) {
+  async findPendingDeliveries(user?: User) {
     const whereClause: any = {
       deliveryUser: IsNull(),
       isPaid: true
@@ -287,11 +385,21 @@ export class OrdersService {
       }
     }
 
-    return this.orderRepository.find({
+    const orders = await this.orderRepository.find({
       where: whereClause,
       order: { createdAt: 'DESC' },
       relations: ['items', 'business', 'user']
     });
+
+    // Exclude IgoTaxi orders for users who don't have 'Carro' as vehicle
+    if (user && (user.roles.includes('empleado') || user.roles.includes('worker'))) {
+      const vehicle = user.vehicle || 'Moto';
+      if (vehicle !== 'Carro') {
+        return orders.filter(o => o.category !== 'IgoTaxi');
+      }
+    }
+
+    return orders;
   }
 
   findMyOrders(user: User) {
@@ -309,7 +417,28 @@ export class OrdersService {
     });
     if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
     
-    if (updateOrderDto.status) order.status = updateOrderDto.status;
+    if (updateOrderDto.status) {
+      const prevStatus = order.status;
+      
+      // Regla de Oro: Evitar revertir un pedido completado (DELIVERED/CANCELLED) a estados anteriores por sobreescritura concurrente
+      if ((prevStatus === OrderStatus.DELIVERED || prevStatus === OrderStatus.CANCELLED) && 
+          updateOrderDto.status !== prevStatus) {
+         console.warn(`[Defensive Guard] Intento de revertir orden de ${prevStatus} a ${updateOrderDto.status} ignorado.`);
+      } else {
+        order.status = updateOrderDto.status;
+        
+        // Si cambia de READY / PENDING / PAID a ON_WAY, setear acceptedAt
+        if (updateOrderDto.status === OrderStatus.ON_WAY && prevStatus !== OrderStatus.ON_WAY) {
+          order.acceptedAt = new Date();
+        }
+        
+        // Si cambia a DELIVERED, setear completedAt
+        if (updateOrderDto.status === OrderStatus.DELIVERED && prevStatus !== OrderStatus.DELIVERED) {
+          order.completedAt = new Date();
+        }
+      }
+    }
+
     if (updateOrderDto.isPaid !== undefined) order.isPaid = updateOrderDto.isPaid;
     if (updateOrderDto.category) order.category = updateOrderDto.category;
     if (updateOrderDto.shippingType) order.shippingType = updateOrderDto.shippingType;
@@ -320,14 +449,24 @@ export class OrdersService {
     if (updateOrderDto.totalItems !== undefined) order.totalItems = updateOrderDto.totalItems;
     if (updateOrderDto.deliveryFee !== undefined) order.deliveryFee = updateOrderDto.deliveryFee;
     if (updateOrderDto.totalAmount !== undefined) order.totalAmount = updateOrderDto.totalAmount;
+    if (updateOrderDto.photoUrl !== undefined) order.photoUrl = updateOrderDto.photoUrl;
+    if (updateOrderDto.packageValue !== undefined) order.packageValue = updateOrderDto.packageValue;
+    if (updateOrderDto.packageSize !== undefined) order.packageSize = updateOrderDto.packageSize;
+    if (updateOrderDto.isInsured !== undefined) order.isInsured = updateOrderDto.isInsured;
     
     if (updateOrderDto.deliveryUserId !== undefined) {
-      if (updateOrderDto.deliveryUserId === null) {
+      if (updateOrderDto.deliveryUserId === null || updateOrderDto.deliveryUserId === '') {
         order.deliveryUser = null;
       } else {
         const user = await this.userRepository.findOne({ where: { id: updateOrderDto.deliveryUserId } });
         if (!user) throw new NotFoundException(`Usuario motorizado ${updateOrderDto.deliveryUserId} no encontrado`);
         
+        // Si el pedido se le asigna a un motorizado y no estaba en ON_WAY, se cambia a ON_WAY y se registra acceptedAt
+        if (order.status !== OrderStatus.ON_WAY && order.status !== OrderStatus.DELIVERED && order.status !== OrderStatus.CANCELLED) {
+          order.status = OrderStatus.ON_WAY;
+          order.acceptedAt = new Date();
+        }
+
         // Validar compatibilidad de vehículo
         const isDriver = user.roles.includes('empleado') || user.roles.includes('worker');
         if (isDriver) {

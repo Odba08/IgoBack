@@ -1,8 +1,9 @@
-import { IsNumber, IsOptional, IsUUID, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsUUID, IsString, IsBoolean } from 'class-validator';
 
 export class GetQuoteDto {
   @IsUUID()
-  businessId: string;
+  @IsOptional()
+  businessId?: string;
 
   // Coordenadas opcionales del Punto A si se arrastra el pin morado
   @IsNumber()
@@ -23,4 +24,20 @@ export class GetQuoteDto {
   @IsString()
   @IsOptional()
   shippingType?: string;
+
+  @IsString()
+  @IsOptional()
+  category?: string;
+
+  @IsNumber()
+  @IsOptional()
+  packageValue?: number;
+
+  @IsString()
+  @IsOptional()
+  packageSize?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isInsured?: boolean;
 }

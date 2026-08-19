@@ -10,6 +10,7 @@ import { MenuCategoryModule } from './menu-category/menu-category.module';
 import { OrdersModule } from './orders/orders.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { AuthModule } from './auth/auth.module';
     OrdersModule,
     UsersModule,
     AuthModule,
+    SettingsModule,
   ],
 })
 export class AppModule {}

@@ -13,9 +13,19 @@ export class Order {
     @Column({ type: 'int', generated: 'increment' })
     orderNumber: number;
 
-    // --- RELACIÓN CON EL NEGOCIO (OBLIGATORIA) ---
-    @ManyToOne(() => Business, (business) => business.orders, { eager: true })
-    business: Business;
+    // --- RELACIÓN CON EL NEGOCIO (OBLIGATORIA PARA COMPRAS, OPCIONAL PARA ENVIOS/TAXI) ---
+    @ManyToOne(() => Business, (business) => business.orders, { eager: true, nullable: true })
+    business?: Business | null;
+
+    // --- COORDENADAS Y DIRECCIÓN DE RECOGIDA (ORIGEN / PUNTO A) ---
+    @Column('float', { nullable: true })
+    pickupLat?: number;
+
+    @Column('float', { nullable: true })
+    pickupLong?: number;
+
+    @Column('text', { nullable: true })
+    pickupAddress?: string;
 
     // --- RELACIÓN CON EL USUARIO ---
     @ManyToOne(() => User, (user) => user.orders, { eager: true, nullable: true, onDelete: 'SET NULL' })
@@ -70,6 +80,24 @@ export class Order {
     // --- DETALLE DE PRODUCTOS ---
     @OneToMany(() => OrderItem, (orderItem) => orderItem.order, { cascade: true })
     items: OrderItem[];
+
+    @Column('text', { nullable: true })
+    photoUrl?: string;
+
+    @Column('timestamp without time zone', { nullable: true })
+    acceptedAt?: Date;
+
+    @Column('timestamp without time zone', { nullable: true })
+    completedAt?: Date;
+
+    @Column('float', { nullable: true })
+    packageValue?: number;
+
+    @Column('text', { nullable: true })
+    packageSize?: string;
+
+    @Column('boolean', { default: false })
+    isInsured: boolean;
 
     // --- TIMESTAMPS ---
     @CreateDateColumn()
