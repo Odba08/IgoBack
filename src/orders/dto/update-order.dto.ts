@@ -55,6 +55,10 @@ export class UpdateOrderDto {
   @IsOptional()
   photoUrl?: string;
 
+  @IsString()
+  @IsOptional()
+  paymentCaptureUrl?: string;
+
   @IsNumber()
   @IsOptional()
   packageValue?: number;

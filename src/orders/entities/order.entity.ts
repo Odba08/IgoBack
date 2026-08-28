@@ -84,6 +84,9 @@ export class Order {
     @Column('text', { nullable: true })
     photoUrl?: string;
 
+    @Column('text', { nullable: true })
+    paymentCaptureUrl?: string;
+
     @Column('timestamp without time zone', { nullable: true })
     acceptedAt?: Date;
 

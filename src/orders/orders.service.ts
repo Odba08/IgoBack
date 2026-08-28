@@ -450,6 +450,7 @@ export class OrdersService {
     if (updateOrderDto.deliveryFee !== undefined) order.deliveryFee = updateOrderDto.deliveryFee;
     if (updateOrderDto.totalAmount !== undefined) order.totalAmount = updateOrderDto.totalAmount;
     if (updateOrderDto.photoUrl !== undefined) order.photoUrl = updateOrderDto.photoUrl;
+    if (updateOrderDto.paymentCaptureUrl !== undefined) order.paymentCaptureUrl = updateOrderDto.paymentCaptureUrl;
     if (updateOrderDto.packageValue !== undefined) order.packageValue = updateOrderDto.packageValue;
     if (updateOrderDto.packageSize !== undefined) order.packageSize = updateOrderDto.packageSize;
     if (updateOrderDto.isInsured !== undefined) order.isInsured = updateOrderDto.isInsured;
