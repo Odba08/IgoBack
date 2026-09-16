@@ -1,26 +1,20 @@
-import { BadRequestException, Controller,Get,Param,Post, Res, UploadedFile, UseInterceptors, Req } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, Post, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FilesService } from './files.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { fileFilter } from './helpers/fileFilter.helper';
-import { diskStorage } from 'multer';
-import { fileNamer } from './helpers/fileNamer.helper';
-import { Response, Request } from 'express';
-import { ConfigService } from '@nestjs/config';
-
+import { memoryStorage } from 'multer';
+import { Response } from 'express';
 
 @Controller('files')
 export class FilesController {
-  constructor(private readonly filesService: FilesService,
-    private readonly configService: ConfigService
-  ) {}
+  constructor(private readonly filesService: FilesService) {}
 
-  @Get('products/:imageName' )
+  @Get('products/:imageName')
   findFoodImage(
-    @Res() res: Response, 
+    @Res() res: Response,
     @Param('imageName') imageName: string
-  ){
-    const path = this.filesService.getStaticProductImage(imageName)
-
+  ) {
+    const path = this.filesService.getStaticProductImage(imageName);
     res.sendFile(path);
   }
 
@@ -28,90 +22,59 @@ export class FilesController {
   findUserImage(
     @Res() res: Response,
     @Param('imageName') imageName: string
-  ){
-
-    const path = this.filesService.getUserStaticProductImage(imageName)
-    
+  ) {
+    const path = this.filesService.getUserStaticProductImage(imageName);
     res.sendFile(path);
   }
 
   @Get('bussiness/:imageName')
   findExerciseImage(
-    @Res() res: Response, 
+    @Res() res: Response,
     @Param('imageName') imageName: string
   ) {
-    const path = this.filesService.getStaticProductImageniu(imageName)
-
+    const path = this.filesService.getStaticProductImageniu(imageName);
     res.sendFile(path);
   }
 
   @Post('products')
-  @UseInterceptors( FileInterceptor('file',{
+  @UseInterceptors(FileInterceptor('file', {
     fileFilter: fileFilter,
-    storage:diskStorage({
-      destination: './static//products',
-      filename:fileNamer
-    })
+    storage: memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
   }))
-  uploadFile(
-    @UploadedFile()  file: Express.Multer.File,
-    @Req() req: Request
-  ){
-    if(!file){
-    throw new BadRequestException('No file uploaded')
+  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
     }
-
-    const hostApi = this.configService.get('HOST_API') || `${req.protocol}://${req.get('host')}/api`;
-    const secureUrl = `${hostApi}/files/products/${file.filename}`;
-
-    return {
-     secureUrl 
-    }
+    const secureUrl = await this.filesService.uploadToImgBB(file);
+    return { secureUrl };
   }
 
   @Post('user')
-  @UseInterceptors( FileInterceptor('file',{
+  @UseInterceptors(FileInterceptor('file', {
     fileFilter: fileFilter,
-    storage:diskStorage({
-      destination: './static//users',
-      filename:fileNamer
-    })
+    storage: memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
   }))
-  uploadUserFile(
-    @UploadedFile() file: Express.Multer.File,
-    @Req() req: Request
-  ){
-    if(!file){
-      throw new BadRequestException('No file uploaded')
+  async uploadUserFile(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
     }
-    const hostApi = this.configService.get('HOST_API') || `${req.protocol}://${req.get('host')}/api`;
-    const secureUrl = `${hostApi}/files/user/${file.filename}`;
-    return {
-      secureUrl
-    }
+    const secureUrl = await this.filesService.uploadToImgBB(file);
+    return { secureUrl };
   }
-  
+
   @Post('bussiness')
-  @UseInterceptors( FileInterceptor('file',{
+  @UseInterceptors(FileInterceptor('file', {
     fileFilter: fileFilter,
-    storage:diskStorage({
-      destination: './static//bussiness',
-      filename:fileNamer
-    })
+    storage: memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
   }))
-  uploadFilenuevo(
-    @UploadedFile()  file: Express.Multer.File,
-    @Req() req: Request
-  ){
-    if(!file){
-    throw new BadRequestException('No file uploaded')
+  async uploadFilenuevo(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
     }
-
-    const hostApi = this.configService.get('HOST_API') || `${req.protocol}://${req.get('host')}/api`;
-    const secureUrl = `${hostApi}/files/bussiness/${file.filename}`;
-
-    return {
-     secureUrl 
-    }
+    const secureUrl = await this.filesService.uploadToImgBB(file);
+    return { secureUrl };
   }
 }

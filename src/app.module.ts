@@ -12,9 +12,25 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { SettingsModule } from './settings/settings.module';
 
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+
 @Module({
   imports: [
     ConfigModule.forRoot(),
+
+    ThrottlerModule.forRoot([
+      {
+        name: 'short',
+        ttl: 1000,
+        limit: 15, // 15 req/s max
+      },
+      {
+        name: 'long',
+        ttl: 60000,
+        limit: 300, // 300 req/min max
+      },
+    ]),
 
     TypeOrmModule.forRoot({
       type: 'postgres',
@@ -37,6 +53,12 @@ import { SettingsModule } from './settings/settings.module';
     UsersModule,
     AuthModule,
     SettingsModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}
