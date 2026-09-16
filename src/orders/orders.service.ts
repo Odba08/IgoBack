@@ -14,6 +14,7 @@ import { firstValueFrom } from 'rxjs';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { GetQuoteDto } from './dto/get-quote.dto';
 import { OrderStatus } from './enums/order-status.enum';
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 @Injectable()
 export class OrdersService {
@@ -36,6 +37,7 @@ export class OrdersService {
 
     private readonly dataSource: DataSource,
     private readonly httpService: HttpService, 
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(createOrderDto: CreateOrderDto, user?: User) {
@@ -98,6 +100,15 @@ export class OrdersService {
       });
 
       await this.orderRepository.save(order);
+
+      if (user?.pushToken) {
+        this.notificationsService.sendPushNotification({
+          to: user.pushToken,
+          title: '¡Recibimos tu pedido! 🛍️',
+          body: `Tu orden #${String(order.orderNumber).padStart(4, '0')} ha sido recibida con éxito.`,
+          data: { orderId: order.id, status: 'CREATED' },
+        }).catch(() => null);
+      }
 
       return { 
           orderId: String(order.orderNumber).padStart(4, '0'), 
@@ -182,6 +193,15 @@ export class OrdersService {
 
         await queryRunner.manager.save(order);
         await queryRunner.commitTransaction();
+
+        if (user?.pushToken) {
+          this.notificationsService.sendPushNotification({
+            to: user.pushToken,
+            title: '¡Recibimos tu pedido! 🛍️',
+            body: `Tu orden #${String(order.orderNumber).padStart(4, '0')} por $${order.totalAmount.toFixed(2)} ha sido creada con éxito.`,
+            data: { orderId: order.id, status: 'CREATED' },
+          }).catch(() => null);
+        }
 
        return { 
             orderId: String(order.orderNumber).padStart(4, '0'), 
@@ -417,9 +437,9 @@ export class OrdersService {
     });
     if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
     
+    const prevStatus = order.status;
+
     if (updateOrderDto.status) {
-      const prevStatus = order.status;
-      
       // Regla de Oro: Evitar revertir un pedido completado (DELIVERED/CANCELLED) a estados anteriores por sobreescritura concurrente
       if ((prevStatus === OrderStatus.DELIVERED || prevStatus === OrderStatus.CANCELLED) && 
           updateOrderDto.status !== prevStatus) {
@@ -485,7 +505,18 @@ export class OrdersService {
       }
     }
     
-    return this.orderRepository.save(order);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Disparar Notificación Push al cliente si cambió de estado y tiene token
+    if (order.user?.pushToken && updateOrderDto.status && updateOrderDto.status !== prevStatus) {
+      this.notificationsService.notifyOrderStatusUpdate(
+        order.user.pushToken,
+        order.id,
+        order.status,
+      ).catch(() => null);
+    }
+
+    return savedOrder;
   }
 
   async remove(id: string) {

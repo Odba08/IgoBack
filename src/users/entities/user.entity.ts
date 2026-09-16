@@ -46,6 +46,11 @@ export class User {
   })
   avatarUrl: string;
 
+  @Column('text', {
+    nullable: true,
+  })
+  pushToken: string;
+
   @OneToMany(() => Order, (order) => order.user)
   orders: Order[];
 

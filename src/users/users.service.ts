@@ -64,6 +64,16 @@ export class UsersService {
     }
   }
 
+  async updatePushToken(id: string, pushToken: string) {
+    const user = await this.userRepository.preload({
+      id,
+      pushToken,
+    });
+    if (!user) throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
+    await this.userRepository.save(user);
+    return { ok: true, message: 'Push token actualizado correctamente' };
+  }
+
   async remove(id: string) {
     const user = await this.findOne(id);
     await this.userRepository.remove(user);
