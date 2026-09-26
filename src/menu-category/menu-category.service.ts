@@ -40,12 +40,23 @@ export class MenuCategoryService {
     return this.menuCategoryRepository.save(category);
   }
 
-  // LISTAR TODAS (Opcional: Podrías filtrar por businessId si quisieras)
+  // LISTAR TODAS
   findAll() {
     return this.menuCategoryRepository.find({
       relations: {
-        business: true, // Para saber de qué negocio es cada una
+        business: true,
       }
+    });
+  }
+
+  // LISTAR POR NEGOCIO (Para IgoStore y Panel Admin)
+  async findByBusiness(businessId: string) {
+    return this.menuCategoryRepository.find({
+      where: { business: { id: businessId } },
+      relations: {
+        products: true,
+      },
+      order: { name: 'ASC' },
     });
   }
 

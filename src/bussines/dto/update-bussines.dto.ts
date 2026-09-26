@@ -39,6 +39,33 @@ export class UpdateBusinessDto {
   commissionPercentage?: number;
 
   @IsString()
+  @IsOptional()
+  legalName?: string;
+
+  @IsString()
+  @IsOptional()
+  rif?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentBank?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentPhone?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentId?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentAccountName?: string;
+
+  @IsOptional()
+  isActive?: boolean;
+
+  @IsString()
   @IsUUID()
   @IsOptional()
   ownerId?: string;

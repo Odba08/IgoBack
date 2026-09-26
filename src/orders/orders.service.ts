@@ -15,6 +15,7 @@ import { UpdateOrderDto } from './dto/update-order.dto';
 import { GetQuoteDto } from './dto/get-quote.dto';
 import { OrderStatus } from './enums/order-status.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
+import { OrdersGateway } from 'src/websockets/orders.gateway';
 
 @Injectable()
 export class OrdersService {
@@ -38,11 +39,30 @@ export class OrdersService {
     private readonly dataSource: DataSource,
     private readonly httpService: HttpService, 
     private readonly notificationsService: NotificationsService,
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
   async create(createOrderDto: CreateOrderDto, user?: User) {
     // ⚡ 1. Extraemos las nuevas variables de recogida
-    const { items, businessId, deliveryLat, deliveryLong, deliveryAddress, userIdTemp, pickupLat, pickupLong, category, shippingType, paymentRecipient, packageValue, packageSize, isInsured } = createOrderDto;
+    const {
+      items,
+      businessId,
+      deliveryLat,
+      deliveryLong,
+      deliveryAddress,
+      userIdTemp,
+      pickupLat,
+      pickupLong,
+      category,
+      shippingType,
+      paymentRecipient,
+      packageValue,
+      packageSize,
+      isInsured,
+      paymentCaptureUrl,
+      paymentReference,
+      paymentMethod,
+    } = createOrderDto;
 
     const isFavorOrTaxi = category === 'IgoFavor' || category === 'IgoTaxi' || !businessId || businessId === '00000000-0000-0000-0000-000000000000';
 
@@ -96,10 +116,16 @@ export class OrdersService {
           paymentRecipient: paymentRecipient || 'Pago IGO',
           packageValue,
           packageSize,
-          isInsured: isInsured || false
+          isInsured: isInsured || false,
+          paymentCaptureUrl,
+          paymentReference,
+          paymentMethod: paymentMethod || 'PAGO_MOVIL',
       });
 
       await this.orderRepository.save(order);
+
+      // Notificación Socket en tiempo real
+      this.ordersGateway.notifyOrderCreated(order);
 
       if (user?.pushToken) {
         this.notificationsService.sendPushNotification({
@@ -188,11 +214,17 @@ export class OrdersService {
             paymentRecipient: paymentRecipient || 'Pago IGO',
             packageValue,
             packageSize,
-            isInsured: isInsured || false
+            isInsured: isInsured || false,
+            paymentCaptureUrl,
+            paymentReference,
+            paymentMethod: paymentMethod || 'PAGO_MOVIL',
         });
 
         await queryRunner.manager.save(order);
         await queryRunner.commitTransaction();
+
+        // Notificación Socket en tiempo real
+        this.ordersGateway.notifyOrderCreated(order);
 
         if (user?.pushToken) {
           this.notificationsService.sendPushNotification({
@@ -505,7 +537,14 @@ export class OrdersService {
       }
     }
     
+    if (updateOrderDto.paymentReference !== undefined) order.paymentReference = updateOrderDto.paymentReference;
+    if (updateOrderDto.paymentMethod !== undefined) order.paymentMethod = updateOrderDto.paymentMethod;
+    if (updateOrderDto.verifiedAt !== undefined) order.verifiedAt = updateOrderDto.verifiedAt;
+    
     const savedOrder = await this.orderRepository.save(order);
+
+    // Notificación Socket en tiempo real
+    this.ordersGateway.notifyOrderUpdated(savedOrder);
 
     // Disparar Notificación Push al cliente si cambió de estado y tiene token
     if (order.user?.pushToken && updateOrderDto.status && updateOrderDto.status !== prevStatus) {
@@ -517,6 +556,111 @@ export class OrdersService {
     }
 
     return savedOrder;
+  }
+
+  // --- ASIGNACIÓN RÁPIDA DE REPARTIDOR (DESDE PANEL ADMIN) ---
+  async assignDriver(id: string, deliveryUserId: string | null) {
+    const order = await this.orderRepository.findOne({
+      where: { id },
+      relations: ['items', 'business', 'user', 'deliveryUser'],
+    });
+    if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
+
+    if (!deliveryUserId) {
+      order.deliveryUser = null;
+    } else {
+      const driver = await this.userRepository.findOne({ where: { id: deliveryUserId } });
+      if (!driver) throw new NotFoundException(`Repartidor ${deliveryUserId} no encontrado`);
+      order.deliveryUser = driver;
+
+      // Si no estaba en camino o entregada, pasar a ON_WAY
+      if (order.status !== OrderStatus.DELIVERED && order.status !== OrderStatus.CANCELLED) {
+        order.status = OrderStatus.ON_WAY;
+        order.acceptedAt = new Date();
+      }
+
+      // Notificar al repartidor asignado vía WebSocket
+      this.ordersGateway.notifyDriverAssigned(order, driver.id);
+    }
+
+    const savedOrder = await this.orderRepository.save(order);
+    this.ordersGateway.notifyOrderUpdated(savedOrder);
+
+    if (order.user?.pushToken && order.deliveryUser) {
+      this.notificationsService.sendPushNotification({
+        to: order.user.pushToken,
+        title: '¡Repartidor asignado! 🛵',
+        body: `${order.deliveryUser.fullName || 'Un repartidor'} va en camino con tu pedido #${String(order.orderNumber).padStart(4, '0')}.`,
+        data: { orderId: order.id, status: order.status },
+      }).catch(() => null);
+    }
+
+    return savedOrder;
+  }
+
+  // --- VERIFICACIÓN DE PAGO POR EL ADMIN ---
+  async verifyPayment(id: string, isPaid: boolean) {
+    const order = await this.orderRepository.findOne({
+      where: { id },
+      relations: ['items', 'business', 'user', 'deliveryUser'],
+    });
+    if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
+
+    order.isPaid = isPaid;
+    if (isPaid) {
+      order.status = OrderStatus.PAID;
+      order.verifiedAt = new Date();
+
+      // Notificar a todos vía WebSocket que el pedido ya fue pagado/confirmado y está listo para despachar
+      this.ordersGateway.notifyPaymentVerified(order);
+
+      if (order.user?.pushToken) {
+        this.notificationsService.sendPushNotification({
+          to: order.user.pushToken,
+          title: '¡Pago Confirmado! 🎉',
+          body: `Tu pago para la orden #${String(order.orderNumber).padStart(4, '0')} ha sido verificado con éxito.`,
+          data: { orderId: order.id, status: 'PAID' },
+        }).catch(() => null);
+      }
+    }
+
+    const savedOrder = await this.orderRepository.save(order);
+    this.ordersGateway.notifyOrderUpdated(savedOrder);
+    return savedOrder;
+  }
+
+  // --- REPORTE DE DEUDAS Y COMISIONES POR COMERCIO ---
+  async getBusinessDebtsReport() {
+    const businesses = await this.businessRepository.find({
+      relations: ['orders'],
+    });
+
+    return businesses.map((b) => {
+      const deliveredOrders = (b.orders || []).filter(
+        (o) => o.status === OrderStatus.DELIVERED || o.isPaid
+      );
+
+      const totalSales = deliveredOrders.reduce((sum, o) => sum + (o.totalItems || 0), 0);
+      const commissionRate = b.commissionPercentage || 10;
+      const commissionDue = (totalSales * commissionRate) / 100;
+
+      // Calcular fecha del pedido más antiguo pendiente de liquidación
+      const oldestPendingDate = deliveredOrders.length > 0 ? deliveredOrders[deliveredOrders.length - 1].createdAt : null;
+
+      return {
+        businessId: b.id,
+        businessName: b.name,
+        legalName: b.legalName || b.name,
+        rif: b.rif || 'N/A',
+        paymentPhone: b.paymentPhone || 'N/A',
+        isActive: b.isActive,
+        commissionPercentage: commissionRate,
+        totalOrdersCount: deliveredOrders.length,
+        totalSalesAmount: parseFloat(totalSales.toFixed(2)),
+        commissionDueAmount: parseFloat(commissionDue.toFixed(2)),
+        oldestOrderDate: oldestPendingDate,
+      };
+    });
   }
 
   async remove(id: string) {

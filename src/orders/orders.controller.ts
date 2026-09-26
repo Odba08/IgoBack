@@ -8,6 +8,8 @@ import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/users/entities/user.entity';
 import { AuthGuard } from '@nestjs/passport';
 
+import { OptionalJwtAuthGuard } from 'src/auth/guards/optional-jwt-auth.guard';
+
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
@@ -18,11 +20,16 @@ export class OrdersController {
   }
   
   @Post()
-  @UseGuards(AuthGuard(['jwt']))
+  @UseGuards(OptionalJwtAuthGuard)
   create(@Body() createOrderDto: CreateOrderDto, @Req() req: any) {
     // Si viene autenticado, req.user estará disponible
     const user: User | undefined = req.user;
     return this.ordersService.create(createOrderDto, user);
+  }
+
+  @Get('reports/business-debts')
+  getBusinessDebtsReport() {
+    return this.ordersService.getBusinessDebtsReport();
   }
 
   @Get('my-orders')
@@ -45,6 +52,22 @@ export class OrdersController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.ordersService.findOne(id);
+  }
+
+  @Patch(':id/assign-driver')
+  assignDriver(
+    @Param('id') id: string,
+    @Body('deliveryUserId') deliveryUserId: string | null,
+  ) {
+    return this.ordersService.assignDriver(id, deliveryUserId);
+  }
+
+  @Patch(':id/verify-payment')
+  verifyPayment(
+    @Param('id') id: string,
+    @Body('isPaid') isPaid: boolean,
+  ) {
+    return this.ordersService.verifyPayment(id, isPaid !== undefined ? isPaid : true);
   }
 
   @Patch(':id')

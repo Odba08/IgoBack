@@ -80,4 +80,16 @@ export class CreateOrderDto {
     @IsBoolean()
     @IsOptional()
     isInsured?: boolean;
+
+    @IsString()
+    @IsOptional()
+    paymentCaptureUrl?: string;
+
+    @IsString()
+    @IsOptional()
+    paymentReference?: string;
+
+    @IsString()
+    @IsOptional()
+    paymentMethod?: string;
 }

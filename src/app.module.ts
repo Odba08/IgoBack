@@ -12,6 +12,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { SettingsModule } from './settings/settings.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { WebSocketsModule } from './websockets/websockets.module';
 
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -33,16 +34,27 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
       },
     ]),
 
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST,
-      port: +process.env.DB_PORT,
-      database: process.env.DB_NAME,
-      username: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,      
-      autoLoadEntities: true,
-      synchronize: true,
-    }),
+    TypeOrmModule.forRoot(
+      process.env.DATABASE_URL
+        ? {
+            type: 'postgres',
+            url: process.env.DATABASE_URL,
+            autoLoadEntities: true,
+            synchronize: true,
+            ssl: { rejectUnauthorized: false },
+          }
+        : {
+            type: 'postgres',
+            host: process.env.DB_HOST,
+            port: +process.env.DB_PORT,
+            database: process.env.DB_NAME,
+            username: process.env.DB_USERNAME,
+            password: process.env.DB_PASSWORD,
+            autoLoadEntities: true,
+            synchronize: true,
+            ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+          },
+    ),
 
     ProductsModule,
     BusinessModule,
@@ -55,6 +67,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
     AuthModule,
     SettingsModule,
     NotificationsModule,
+    WebSocketsModule,
   ],
   providers: [
     {

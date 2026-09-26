@@ -17,6 +17,11 @@ export class MenuCategoryController {
     return this.menuCategoryService.findAll();
   }
 
+  @Get('business/:businessId')
+  findByBusiness(@Param('businessId', ParseUUIDPipe) businessId: string) {
+    return this.menuCategoryService.findByBusiness(businessId);
+  }
+
   @Get(':id')
   // Agregamos ParseUUIDPipe para validar que sea un ID válido
   findOne(@Param('id', ParseUUIDPipe) id: string) { 

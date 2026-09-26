@@ -50,6 +50,27 @@ export class Business {
     commissionPercentage: number;
 
     @Column('text', { nullable: true })
+    legalName?: string; // Nombre Jurídico / Razón Social
+
+    @Column('text', { nullable: true })
+    rif?: string; // RIF de la empresa (ej: J-12345678-0)
+
+    @Column('text', { nullable: true })
+    paymentBank?: string; // Banco para Pago Móvil (ej: 0102 Banco de Venezuela)
+
+    @Column('text', { nullable: true })
+    paymentPhone?: string; // Teléfono Pago Móvil
+
+    @Column('text', { nullable: true })
+    paymentId?: string; // C.I. o RIF Pago Móvil
+
+    @Column('text', { nullable: true })
+    paymentAccountName?: string; // Titular de la cuenta
+
+    @Column('boolean', { default: true })
+    isActive: boolean; // Estado activo / suspendido por deuda
+
+    @Column('text', { nullable: true })
     ownerId: string;
 
     @OneToMany(() => Order, (order) => order.business)

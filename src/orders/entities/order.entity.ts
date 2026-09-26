@@ -87,6 +87,15 @@ export class Order {
     @Column('text', { nullable: true })
     paymentCaptureUrl?: string;
 
+    @Column('text', { nullable: true })
+    paymentReference?: string; // Número de referencia del Pago Móvil
+
+    @Column('text', { default: 'PAGO_MOVIL' })
+    paymentMethod: string; // 'PAGO_MOVIL' | 'EFECTIVO' | 'ZELLE'
+
+    @Column('timestamp without time zone', { nullable: true })
+    verifiedAt?: Date; // Fecha de confirmación del pago por el admin
+
     @Column('timestamp without time zone', { nullable: true })
     acceptedAt?: Date;
 

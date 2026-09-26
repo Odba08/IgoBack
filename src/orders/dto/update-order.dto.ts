@@ -70,4 +70,15 @@ export class UpdateOrderDto {
   @IsBoolean()
   @IsOptional()
   isInsured?: boolean;
+
+  @IsString()
+  @IsOptional()
+  paymentReference?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentMethod?: string;
+
+  @IsOptional()
+  verifiedAt?: Date;
 }
