@@ -195,7 +195,7 @@ export class BussinessService {
       where: { business: { id: business.id } },
       take: limit,
       skip: offset,
-      relations: { images: true }
+      relations: { images: true, menuCategory: true }
     });
 
     return products.map((product) => ({
@@ -207,7 +207,7 @@ export class BussinessService {
   async findOneForBusiness(businessId: string, productId: string) {
     const product = await this.productRepository.findOne({
       where: { id: productId, business: { id: businessId } },
-      relations: { images: true, business: true },
+      relations: { images: true, business: true, menuCategory: true },
     });
 
     if (!product) {
@@ -227,11 +227,11 @@ export class BussinessService {
     productId: string,
     updateProductDto: UpdateProductDto,
   ) {
-    const { images, ...toUpdate } = updateProductDto;
+    const { images, menuCategoryId, ...toUpdate } = updateProductDto;
 
     const product = await this.productRepository.findOne({
       where: { id: productId, business: { id: businessId } },
-      relations: { images: true, business: true },
+      relations: { images: true, business: true, menuCategory: true },
     });
 
     if (!product) {
@@ -241,6 +241,10 @@ export class BussinessService {
     }
 
     Object.assign(product, toUpdate);
+
+    if (menuCategoryId !== undefined) {
+      product.menuCategory = menuCategoryId ? ({ id: menuCategoryId } as any) : null;
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

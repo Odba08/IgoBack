@@ -77,6 +77,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private broadcastActiveDrivers() {
     const list = Array.from(this.activeDrivers.values());
     this.server.emit('drivers:active_list', list);
+    this.server.emit('drivers:locations', list);
   }
 
   // Notificar a todos cuando se crea un nuevo pedido

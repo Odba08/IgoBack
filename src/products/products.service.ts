@@ -64,7 +64,7 @@ export class ProductsService {
       where: { isApproved: true },
       take: limit,
       skip: offset,
-      relations: { images: true },
+      relations: { images: true, menuCategory: true },
     });
 
     return products.map(product => ({
