@@ -16,6 +16,7 @@ import { GetQuoteDto } from './dto/get-quote.dto';
 import { OrderStatus } from './enums/order-status.enum';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { OrdersGateway } from 'src/websockets/orders.gateway';
+import { SettingsService } from 'src/settings/settings.service';
 
 @Injectable()
 export class OrdersService {
@@ -40,7 +41,9 @@ export class OrdersService {
     private readonly httpService: HttpService, 
     private readonly notificationsService: NotificationsService,
     private readonly ordersGateway: OrdersGateway,
+    private readonly settingsService: SettingsService,
   ) {}
+
 
   async create(createOrderDto: CreateOrderDto, user?: User) {
     // ⚡ 1. Extraemos las nuevas variables de recogida
@@ -86,7 +89,7 @@ export class OrdersService {
         deliveryLat, deliveryLong
     );
 
-    const deliveryFee = this.calculateDeliveryFee(
+    const deliveryFee = await this.calculateDeliveryFee(
       routeData.distance, 
       shippingType || 'Moto',
       category,
@@ -286,7 +289,7 @@ export class OrdersService {
     );
 
     // 4. Calcular tarifa vial aplicando reglas financieras
-    const deliveryFee = this.calculateDeliveryFee(
+    const deliveryFee = await this.calculateDeliveryFee(
       routeData.distance, 
       shippingType || 'Moto',
       category,
@@ -360,26 +363,60 @@ export class OrdersService {
     return R * c;
   }
 
-  private calculateDeliveryFee(
+  private async calculateDeliveryFee(
     distanceKm: number, 
     shippingType: string = 'Moto',
     category?: string,
     packageValue?: number,
     packageSize?: string,
     isInsured: boolean = false
-  ): number {
-    const BASE_FEE = 3.00;
-    const FREE_KM_LIMIT = 3;
-    const PRICE_PER_KM = 1.00;
+  ): Promise<number> {
+    const isFavor = category === 'IgoFavor';
+    const isTaxi = category === 'IgoTaxi' || category === 'Taxi';
 
-    let fee = BASE_FEE;
-    if (distanceKm > FREE_KM_LIMIT) {
-        fee += (distanceKm - FREE_KM_LIMIT) * PRICE_PER_KM;
+    let baseFee = 3.00;
+    let pricePerKm = 1.00;
+    const freeKmLimit = 3;
+
+    if (isTaxi) {
+      baseFee = await this.settingsService.getNumericSetting('FEE_BASE_TAXI', 5.00);
+      pricePerKm = await this.settingsService.getNumericSetting('FEE_KM_TAXI', 1.50);
+    } else if (isFavor) {
+      baseFee = await this.settingsService.getNumericSetting('FEE_BASE_FAVOR', 3.00);
+      pricePerKm = await this.settingsService.getNumericSetting('FEE_KM_FAVOR', 1.00);
+    } else {
+      baseFee = await this.settingsService.getNumericSetting('FEE_BASE_DELIVERY', 3.00);
+      pricePerKm = await this.settingsService.getNumericSetting('FEE_KM_DELIVERY', 1.00);
     }
 
-    // Recargo nocturno (22:00 - 06:00)
-    const hour = new Date().getHours();
-    if (hour >= 22 || hour < 6) fee *= 1.5;
+    let fee = baseFee;
+    if (distanceKm > freeKmLimit) {
+      fee += (distanceKm - freeKmLimit) * pricePerKm;
+    }
+
+    // Recargo nocturno configurable
+    const nightStartStr = await this.settingsService.getSettingValue('NIGHT_SHIFT_START', '22:00');
+    const nightEndStr = await this.settingsService.getSettingValue('NIGHT_SHIFT_END', '06:00');
+    const nightSurcharge = await this.settingsService.getNumericSetting('NIGHT_SHIFT_SURCHARGE', 1.5);
+
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    
+    const [startH, startM] = (nightStartStr || '22:00').split(':').map(Number);
+    const [endH, endM] = (nightEndStr || '06:00').split(':').map(Number);
+    const startMinutes = (startH || 22) * 60 + (startM || 0);
+    const endMinutes = (endH || 6) * 60 + (endM || 0);
+
+    let isNight = false;
+    if (startMinutes > endMinutes) {
+      isNight = currentMinutes >= startMinutes || currentMinutes < endMinutes;
+    } else {
+      isNight = currentMinutes >= startMinutes && currentMinutes < endMinutes;
+    }
+
+    if (isNight && nightSurcharge > 0) {
+      fee *= nightSurcharge;
+    }
 
     // Recargo por tipo de envío
     if (shippingType === 'Carro') {
@@ -388,27 +425,28 @@ export class OrdersService {
       fee += 7.00;
     }
 
-    // Recargos específicos de IgoFavor (Peso/Tamaño y Valor del Paquete)
-    if (category === 'IgoFavor') {
-      // 1. Fee por tamaño/peso
+    // Recargos específicos de IgoFavor
+    if (isFavor) {
       if (packageSize === 'mediano') {
         fee += 2.00;
       } else if (packageSize === 'grande') {
         fee += 5.00;
       }
       
-      // 2. Fee del 5% si el valor del paquete >= 100
       if (packageValue && packageValue >= 100) {
         fee += packageValue * 0.05;
       }
 
-      // 3. Seguro del paquete (2% del valor si se selecciona asegurar)
       if (isInsured && packageValue) {
         fee += packageValue * 0.02;
       }
     }
 
     return parseFloat(fee.toFixed(2));
+  }
+
+  getActiveDrivers() {
+    return this.ordersGateway.getActiveDriversList();
   }
 
   // --- MÉTODOS ESTÁNDAR ---

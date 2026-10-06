@@ -26,6 +26,8 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleConnection(client: Socket) {
     this.logger.log(`🔌 Cliente conectado al WebSocket: ${client.id}`);
+    // Emit current active drivers list to the newly connected client
+    client.emit('drivers:active_list', this.getActiveDriversList());
   }
 
   handleDisconnect(client: Socket) {
@@ -36,20 +38,28 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  @SubscribeMessage('drivers:get_active')
+  handleGetActiveDrivers(@ConnectedSocket() client: Socket) {
+    client.emit('drivers:active_list', this.getActiveDriversList());
+    return this.getActiveDriversList();
+  }
+
   // Repartidor se registra como en línea
   @SubscribeMessage('driver:register')
   handleDriverRegister(
     @ConnectedSocket() client: Socket,
-    @MessageBody() driverData: { userId: string; name: string; vehicle?: string; phone?: string }
+    @MessageBody() driverData: { userId: string; name: string; vehicle?: string; phone?: string; employeeStatus?: string }
   ) {
     this.activeDrivers.set(client.id, {
       socketId: client.id,
       ...driverData,
+      employeeStatus: driverData.employeeStatus || 'active',
       connectedAt: new Date(),
     });
     this.logger.log(`🛵 Repartidor activo registrado: ${driverData.name} (${driverData.userId})`);
     this.broadcastActiveDrivers();
   }
+
 
   // Repartidor actualiza su posición GPS en tiempo real
   @SubscribeMessage('driver:location_update')

@@ -44,8 +44,14 @@ export class OrdersController {
     return this.ordersService.findPendingDeliveries(user);
   }
 
+  @Get('active-drivers')
+  getActiveDrivers() {
+    return this.ordersService.getActiveDrivers();
+  }
+
   @Get()
   findAll() {
+
     return this.ordersService.findAll();
   }
 

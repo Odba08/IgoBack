@@ -9,12 +9,14 @@ import { Business } from 'src/bussines/entities/bussines.entity';
 import { User } from 'src/users/entities/user.entity';
 import { HttpModule } from '@nestjs/axios'; 
 import { AuthModule } from 'src/auth/auth.module';
+import { SettingsModule } from 'src/settings/settings.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order, OrderItem, Product, Business, User]),
     HttpModule,
-    AuthModule
+    AuthModule,
+    SettingsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],
