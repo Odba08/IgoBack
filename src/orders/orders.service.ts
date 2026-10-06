@@ -114,7 +114,7 @@ export class OrdersService {
           totalItems: 0,
           deliveryFee: deliveryFee,
           totalAmount: deliveryFee,
-          category: category || 'Envíos',
+          category: category || (shippingType === 'Carro' ? 'IgoTaxi' : 'IgoFavor'),
           shippingType: shippingType || 'Moto',
           paymentRecipient: paymentRecipient || 'Pago IGO',
           packageValue,

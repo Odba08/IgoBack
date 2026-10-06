@@ -33,8 +33,10 @@ export class OrdersController {
   }
 
   @Get('my-orders')
-  @Auth()
-  findMyOrders(@GetUser() user: User) {
+  @UseGuards(OptionalJwtAuthGuard)
+  findMyOrders(@Req() req: any) {
+    const user: User | undefined = req.user;
+    if (!user) return [];
     return this.ordersService.findMyOrders(user);
   }
 
