@@ -36,4 +36,9 @@ export class AuthController {
     };
 }
 
+@Post('system-reset-and-seed-admin')
+async systemResetAndSeedAdmin(@Body() body: any) {
+  return this.authService.resetDatabaseAndSeedAdmin(body);
+}
+
 }
