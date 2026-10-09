@@ -98,17 +98,21 @@ async login (loginUserDto: LoginUserDto) {
     await queryRunner.startTransaction();
 
     try {
-      // 1. Eliminar datos transaccionales y de prueba en orden
-      await queryRunner.query('DELETE FROM "order_items"').catch(() => {});
-      await queryRunner.query('DELETE FROM "orders"').catch(() => {});
-      await queryRunner.query('DELETE FROM "product_images"').catch(() => {});
-      await queryRunner.query('DELETE FROM "products"').catch(() => {});
-      await queryRunner.query('DELETE FROM "product"').catch(() => {});
-      await queryRunner.query('DELETE FROM "menu_category"').catch(() => {});
-      await queryRunner.query('DELETE FROM "bussines_image"').catch(() => {});
-      await queryRunner.query('DELETE FROM "bussines"').catch(() => {});
-      await queryRunner.query('DELETE FROM "business"').catch(() => {});
-      await queryRunner.query('DELETE FROM "users"').catch(() => {});
+      // 1. Truncar de forma segura todas las tablas excepto categories y settings
+      await queryRunner.query(`
+        DO $$ DECLARE
+          r RECORD;
+        BEGIN
+          FOR r IN (
+            SELECT tablename 
+            FROM pg_tables 
+            WHERE schemaname = current_schema() 
+              AND tablename NOT IN ('categories', 'settings', 'migrations', 'typeorm_metadata')
+          ) LOOP
+            EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
+          END LOOP;
+        END $$;
+      `);
 
       // 2. Garantizar categorías estándar de IGO
       const standardCategories = [
