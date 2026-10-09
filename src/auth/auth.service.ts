@@ -164,12 +164,24 @@ async login (loginUserDto: LoginUserDto) {
         },
         token,
       };
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
+    } catch (error: any) {
+      try {
+        await queryRunner.rollbackTransaction();
+      } catch (rbErr) {
+        // ignore rollback error if already rolled back
+      }
       console.error('Error during database reset & seed:', error);
-      throw error;
+      return {
+        status: 'error',
+        message: error.message || 'Error al resetear la base de datos',
+        detail: error.detail || error.toString(),
+      };
     } finally {
-      await queryRunner.release();
+      try {
+        await queryRunner.release();
+      } catch (relErr) {
+        // ignore release error
+      }
     }
   }
 }
