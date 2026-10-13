@@ -65,4 +65,11 @@ export class CreateBusinessDto {
     @IsUUID()
     @IsOptional()
     ownerId?: string;
+
+    @IsNumber()
+    @IsOptional()
+    freeDeliveryAbove?: number;
+
+    @IsOptional()
+    isOfficialStore?: boolean;
 }

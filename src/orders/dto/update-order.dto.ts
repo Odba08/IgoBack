@@ -81,4 +81,16 @@ export class UpdateOrderDto {
 
   @IsOptional()
   verifiedAt?: Date;
+
+  @IsString()
+  @IsOptional()
+  supportTicketStatus?: string;
+
+  @IsString()
+  @IsOptional()
+  supportTicketReason?: string;
+
+  @IsString()
+  @IsOptional()
+  supportTicketComment?: string;
 }

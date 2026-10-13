@@ -592,6 +592,9 @@ export class OrdersService {
     if (updateOrderDto.paymentReference !== undefined) order.paymentReference = updateOrderDto.paymentReference;
     if (updateOrderDto.paymentMethod !== undefined) order.paymentMethod = updateOrderDto.paymentMethod;
     if (updateOrderDto.verifiedAt !== undefined) order.verifiedAt = updateOrderDto.verifiedAt;
+    if (updateOrderDto.supportTicketStatus !== undefined) order.supportTicketStatus = updateOrderDto.supportTicketStatus;
+    if (updateOrderDto.supportTicketReason !== undefined) order.supportTicketReason = updateOrderDto.supportTicketReason;
+    if (updateOrderDto.supportTicketComment !== undefined) order.supportTicketComment = updateOrderDto.supportTicketComment;
     
     const savedOrder = await this.orderRepository.save(order);
 
