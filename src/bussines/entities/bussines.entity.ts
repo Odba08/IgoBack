@@ -70,6 +70,18 @@ export class Business {
     @Column('boolean', { default: true })
     isActive: boolean; // Estado activo / suspendido por deuda
 
+    @Column('float', { default: 5.0 })
+    rating: number; // Calificación promedio (1.0 - 5.0)
+
+    @Column('int', { default: 0 })
+    reviewsCount: number; // Cantidad total de reseñas recibidas
+
+    @Column('float', { default: 0 })
+    freeDeliveryAbove: number; // Monto mínimo en $ para delivery gratis (0 = no aplica)
+
+    @Column('boolean', { default: false })
+    isOfficialStore: boolean; // Indica si es Tienda Oficial IGO
+
     @Column('text', { nullable: true })
     ownerId: string;
 

@@ -40,4 +40,8 @@ export class GetQuoteDto {
   @IsBoolean()
   @IsOptional()
   isInsured?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  subtotal?: number;
 }

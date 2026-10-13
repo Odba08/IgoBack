@@ -121,6 +121,49 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  // Notificar reporte de problema / soporte admin
+  notifyOrderIssue(order: any, reason: string, comment?: string) {
+    if (this.server) {
+      this.server.emit('order:issue_reported', {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        order,
+        reason,
+        comment,
+        reportedAt: new Date(),
+      });
+      this.server.emit(`order:${order.id}:issue`, { reason, comment });
+    }
+  }
+
+  // Enviar mensaje de chat (Cliente <-> Motorizado <-> Soporte)
+  @SubscribeMessage('order:send_message')
+  handleOrderSendMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: {
+      orderId: string;
+      senderId: string;
+      senderName: string;
+      senderRole: string; // 'client' | 'driver' | 'admin'
+      text: string;
+    },
+  ) {
+    const payload = {
+      ...data,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.logger.log(`💬 Mensaje en Orden #${data.orderId} de ${data.senderName} (${data.senderRole}): ${data.text}`);
+
+    // Emitir a todos los suscritos al canal de la orden
+    this.server.emit(`order:${data.orderId}:message`, payload);
+    // Y emitir un evento general para que la app o admin panel lo capturen
+    this.server.emit('order:chat_message', payload);
+    return payload;
+  }
+
   // Obtener lista actual de activos
   getActiveDriversList() {
     return Array.from(this.activeDrivers.values());

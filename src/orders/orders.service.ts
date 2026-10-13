@@ -198,6 +198,11 @@ export class OrdersService {
           finalCategory = category || 'Compras';
         }
 
+        let finalDeliveryFee = deliveryFee;
+        if (business && business.freeDeliveryAbove && business.freeDeliveryAbove > 0 && totalItemsPrice >= business.freeDeliveryAbove) {
+          finalDeliveryFee = 0;
+        }
+
         const order = this.orderRepository.create({
             business,
             user: user || null,
@@ -210,8 +215,8 @@ export class OrdersService {
             userIdTemp,
             items: orderItems,
             totalItems: totalItemsPrice,
-            deliveryFee: deliveryFee,
-            totalAmount: totalItemsPrice + deliveryFee,
+            deliveryFee: finalDeliveryFee,
+            totalAmount: totalItemsPrice + finalDeliveryFee,
             category: finalCategory,
             shippingType: shippingType || 'Moto',
             paymentRecipient: paymentRecipient || 'Pago IGO',
@@ -266,10 +271,11 @@ export class OrdersService {
 
     let startLat = pickupLat;
     let startLng = pickupLong;
+    let business = null;
 
     // ⚡ BIFURCACIÓN LÓGICA: Si NO es un cálculo libre, validamos contra la Base de Datos
     if (businessId && businessId !== '00000000-0000-0000-0000-000000000000') {
-      const business = await this.businessRepository.findOne({ where: { id: businessId } });
+      business = await this.businessRepository.findOne({ where: { id: businessId } });
       if (!business) throw new NotFoundException(`Negocio ${businessId} no encontrado`);
       
       // Si no enviaron coordenadas desde el mapa, usamos las del local
@@ -289,7 +295,7 @@ export class OrdersService {
     );
 
     // 4. Calcular tarifa vial aplicando reglas financieras
-    const deliveryFee = await this.calculateDeliveryFee(
+    let deliveryFee = await this.calculateDeliveryFee(
       routeData.distance, 
       shippingType || 'Moto',
       category,
@@ -298,11 +304,19 @@ export class OrdersService {
       isInsured
     );
 
+    let isFreeDelivery = false;
+    if (business && business.freeDeliveryAbove && business.freeDeliveryAbove > 0 && getQuoteDto.subtotal && getQuoteDto.subtotal >= business.freeDeliveryAbove) {
+      deliveryFee = 0;
+      isFreeDelivery = true;
+    }
+
     // 5. Retornar payload puro de telemetría (Cero inserciones en Base de Datos)
     return {
       status: 'QUOTE_GENERATED',
       distance: `${routeData.distance.toFixed(2)} km`,
       deliveryFee: deliveryFee,
+      isFreeDelivery,
+      freeDeliveryAbove: business?.freeDeliveryAbove || 0,
       routePolyline: routeData.points, 
       businessLocation: {
         latitude: startLat,
@@ -714,5 +728,134 @@ export class OrdersService {
     });
     if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
     return order;
+  }
+
+  // --- CALIFICACIONES (1 A 5 ESTRELLAS) ---
+  async rateOrder(
+    id: string,
+    body: {
+      businessRating?: number;
+      driverRating?: number;
+      comment?: string;
+    },
+  ) {
+    const order = await this.orderRepository.findOne({
+      where: { id },
+      relations: ['business', 'deliveryUser'],
+    });
+
+    if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
+
+    if (body.businessRating) {
+      order.businessRating = Math.max(1, Math.min(5, Number(body.businessRating)));
+    }
+    if (body.driverRating) {
+      order.driverRating = Math.max(1, Math.min(5, Number(body.driverRating)));
+    }
+    if (body.comment) {
+      order.ratingComment = body.comment.trim();
+    }
+    order.ratedAt = new Date();
+
+    await this.orderRepository.save(order);
+
+    // Recalcular promedio de estrellas del negocio si aplica
+    if (order.business?.id && body.businessRating) {
+      try {
+        const stats = await this.orderRepository
+          .createQueryBuilder('o')
+          .select('AVG(o.businessRating)', 'avg')
+          .addSelect('COUNT(o.businessRating)', 'cnt')
+          .where('o.businessId = :bId', { bId: order.business.id })
+          .andWhere('o.businessRating IS NOT NULL')
+          .getRawOne();
+
+        if (stats && stats.cnt > 0) {
+          const newAvg = parseFloat(parseFloat(stats.avg).toFixed(1));
+          const newCnt = parseInt(stats.cnt, 10);
+          await this.businessRepository.update(order.business.id, {
+            rating: newAvg,
+            reviewsCount: newCnt,
+          });
+        }
+      } catch (err) {
+        console.warn('Error recalculando rating de negocio:', err);
+      }
+    }
+
+    this.ordersGateway.notifyOrderUpdated(order);
+
+    return {
+      status: 'success',
+      message: 'Calificación registrada exitosamente.',
+      order,
+    };
+  }
+
+  // --- REPORTE DE ERRORES / SOPORTE ADMIN ---
+  async reportIssue(
+    id: string,
+    body: {
+      reason: string;
+      comment?: string;
+    },
+  ) {
+    const order = await this.orderRepository.findOne({
+      where: { id },
+      relations: ['business', 'user', 'deliveryUser'],
+    });
+
+    if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
+
+    order.supportTicketStatus = 'OPEN';
+    order.supportTicketReason = body.reason || 'Problema con el pedido';
+    order.supportTicketComment = body.comment || '';
+
+    await this.orderRepository.save(order);
+
+    // Alerta WebSocket en tiempo real al panel de administración
+    this.ordersGateway.notifyOrderIssue(order, order.supportTicketReason, order.supportTicketComment);
+    this.ordersGateway.notifyOrderUpdated(order);
+
+    return {
+      status: 'success',
+      message: 'Tu reporte ha sido enviado. Un administrador de IGO te contactará.',
+      order,
+    };
+  }
+
+  // --- CHAT EN TIEMPO REAL CLIENTE <-> MOTORIZADO ---
+  async addChatMessage(
+    id: string,
+    body: {
+      senderId: string;
+      senderName: string;
+      senderRole: string;
+      text: string;
+    },
+  ) {
+    const order = await this.orderRepository.findOne({ where: { id } });
+    if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
+
+    const message = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      senderId: body.senderId,
+      senderName: body.senderName,
+      senderRole: body.senderRole,
+      text: body.text,
+      timestamp: new Date().toISOString(),
+    };
+
+    const messages = Array.isArray(order.chatMessages) ? order.chatMessages : [];
+    messages.push(message);
+    order.chatMessages = messages;
+
+    await this.orderRepository.save(order);
+
+    // Emitir WebSocket a los participantes
+    this.ordersGateway.server?.emit(`order:${order.id}:message`, message);
+    this.ordersGateway.server?.emit('order:chat_message', { orderId: order.id, ...message });
+
+    return message;
   }
 }

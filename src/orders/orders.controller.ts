@@ -83,6 +83,45 @@ export class OrdersController {
     return this.ordersService.update(id, updateOrderDto);
   }
 
+  @Post(':id/rate')
+  rateOrder(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      businessRating?: number;
+      driverRating?: number;
+      comment?: string;
+    },
+  ) {
+    return this.ordersService.rateOrder(id, body);
+  }
+
+  @Post(':id/report-issue')
+  reportIssue(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      reason: string;
+      comment?: string;
+    },
+  ) {
+    return this.ordersService.reportIssue(id, body);
+  }
+
+  @Post(':id/chat')
+  sendChatMessage(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      senderId: string;
+      senderName: string;
+      senderRole: string;
+      text: string;
+    },
+  ) {
+    return this.ordersService.addChatMessage(id, body);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.ordersService.remove(id);

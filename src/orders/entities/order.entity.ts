@@ -111,6 +111,33 @@ export class Order {
     @Column('boolean', { default: false })
     isInsured: boolean;
 
+    // --- CALIFICACIONES (1 A 5 ESTRELLAS) ---
+    @Column('float', { nullable: true })
+    businessRating?: number;
+
+    @Column('float', { nullable: true })
+    driverRating?: number;
+
+    @Column('text', { nullable: true })
+    ratingComment?: string;
+
+    @Column('timestamp without time zone', { nullable: true })
+    ratedAt?: Date;
+
+    // --- REPORTE DE ERRORES / SOPORTE ADMIN ---
+    @Column('text', { nullable: true })
+    supportTicketStatus?: string; // 'OPEN' | 'IN_PROGRESS' | 'RESOLVED'
+
+    @Column('text', { nullable: true })
+    supportTicketReason?: string;
+
+    @Column('text', { nullable: true })
+    supportTicketComment?: string;
+
+    // --- HISTORIAL DE MENSAJES DE CHAT CLIENTE <-> MOTORIZADO ---
+    @Column({ type: 'jsonb', default: () => "'[]'" })
+    chatMessages: any[];
+
     // --- TIMESTAMPS ---
     @CreateDateColumn()
     createdAt: Date;
