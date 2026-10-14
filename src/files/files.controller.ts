@@ -1,13 +1,25 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Req, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FilesService } from './files.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { fileFilter } from './helpers/fileFilter.helper';
 import { memoryStorage } from 'multer';
-import { Response } from 'express';
+import { Response, Request } from 'express';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('files')
 export class FilesController {
-  constructor(private readonly filesService: FilesService) {}
+  constructor(
+    private readonly filesService: FilesService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  private getHostApi(req: Request): string {
+    const configHost = this.configService.get<string>('HOST_API');
+    if (configHost) return configHost.replace(/\/$/, '');
+    const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
+    const host = req.get('host') || 'localhost:3000';
+    return `${protocol}://${host}/api`;
+  }
 
   @Get('products/:imageName')
   findFoodImage(
@@ -42,11 +54,12 @@ export class FilesController {
     storage: memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
   }))
-  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+  async uploadFile(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
-    const secureUrl = await this.filesService.uploadToImgBB(file);
+    const hostApi = this.getHostApi(req);
+    const secureUrl = await this.filesService.uploadToImgBB(file, hostApi);
     return { secureUrl };
   }
 
@@ -56,11 +69,12 @@ export class FilesController {
     storage: memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 },
   }))
-  async uploadUserFile(@UploadedFile() file: Express.Multer.File) {
+  async uploadUserFile(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
-    const secureUrl = await this.filesService.uploadToImgBB(file);
+    const hostApi = this.getHostApi(req);
+    const secureUrl = await this.filesService.uploadToImgBB(file, hostApi);
     return { secureUrl };
   }
 
@@ -70,20 +84,22 @@ export class FilesController {
     storage: memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 },
   }))
-  async uploadFilenuevo(@UploadedFile() file: Express.Multer.File) {
+  async uploadFilenuevo(@UploadedFile() file: Express.Multer.File, @Req() req: Request) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
-    const secureUrl = await this.filesService.uploadToImgBB(file);
+    const hostApi = this.getHostApi(req);
+    const secureUrl = await this.filesService.uploadToImgBB(file, hostApi);
     return { secureUrl };
   }
 
   @Post('base64')
-  async uploadBase64(@Body() body: { base64: string; name?: string }) {
+  async uploadBase64(@Body() body: { base64: string; name?: string }, @Req() req: Request) {
     if (!body?.base64) {
       throw new BadRequestException('No se ha proporcionado la imagen en base64');
     }
-    const secureUrl = await this.filesService.uploadBase64ToImgBB(body.base64, body.name);
+    const hostApi = this.getHostApi(req);
+    const secureUrl = await this.filesService.uploadBase64ToImgBB(body.base64, body.name, hostApi);
     return { secureUrl };
   }
 }
