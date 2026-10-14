@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Param, Post, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FilesService } from './files.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { fileFilter } from './helpers/fileFilter.helper';
@@ -75,6 +75,15 @@ export class FilesController {
       throw new BadRequestException('No file uploaded');
     }
     const secureUrl = await this.filesService.uploadToImgBB(file);
+    return { secureUrl };
+  }
+
+  @Post('base64')
+  async uploadBase64(@Body() body: { base64: string; name?: string }) {
+    if (!body?.base64) {
+      throw new BadRequestException('No se ha proporcionado la imagen en base64');
+    }
+    const secureUrl = await this.filesService.uploadBase64ToImgBB(body.base64, body.name);
     return { secureUrl };
   }
 }

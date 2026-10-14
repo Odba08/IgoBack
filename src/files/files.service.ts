@@ -52,6 +52,46 @@ export class FilesService {
     }
   }
 
+  async uploadBase64ToImgBB(base64Str: string, name = 'upload'): Promise<string> {
+    if (!base64Str) {
+      throw new BadRequestException('No se ha recibido base64 válido');
+    }
+    const cleanBase64 = base64Str.replace(/^data:image\/[a-z0-9+]+;base64,/, '');
+    const apiKey = this.configService.get<string>('IMGBB_API_KEY') || '6dfbf7cb3ce7d636c4e9b06b5a89624e';
+
+    try {
+      const form = new FormData();
+      form.append('image', cleanBase64);
+      if (name) {
+        form.append('name', name.split('.')[0]);
+      }
+
+      const { data } = await axios.post(
+        `https://api.imgbb.com/1/upload?key=${apiKey}`,
+        form,
+        {
+          headers: {
+            ...form.getHeaders(),
+            'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          },
+          timeout: 25000,
+        }
+      );
+
+      if (data && data.success && data.data && (data.data.url || data.data.display_url)) {
+        return data.data.url || data.data.display_url;
+      }
+
+      throw new BadRequestException('ImgBB no devolvió una URL válida');
+    } catch (error: any) {
+      console.error('Error subiendo base64 a ImgBB:', error?.response?.data || error?.message);
+      throw new BadRequestException(
+        error?.response?.data?.error?.message || 'Error al subir la imagen en base64'
+      );
+    }
+  }
+
   getStaticProductImage(imageName: string) {
     const path = join(__dirname, '../../static/products', imageName);
     if (!existsSync(path)) throw new BadRequestException('Image not found');
