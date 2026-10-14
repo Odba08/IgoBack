@@ -76,4 +76,12 @@ export class UpdateBusinessDto {
 
   @IsOptional()
   isOfficialStore?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  rating?: number;
+
+  @IsNumber()
+  @IsOptional()
+  reviewsCount?: number;
 }
