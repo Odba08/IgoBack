@@ -61,7 +61,13 @@ export class FilesService {
 
     try {
       const form = new FormData();
-      form.append('image', cleanBase64);
+      const buffer = Buffer.from(cleanBase64, 'base64');
+      const filename = name.endsWith('.png') ? name : (name.endsWith('.jpg') || name.endsWith('.jpeg') ? name : `${name}.jpg`);
+      const contentType = filename.endsWith('.png') ? 'image/png' : 'image/jpeg';
+      form.append('image', buffer, {
+        filename,
+        contentType,
+      });
       if (name) {
         form.append('name', name.split('.')[0]);
       }
