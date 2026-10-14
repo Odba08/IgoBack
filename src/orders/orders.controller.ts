@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Req, Query, UseGuards } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
@@ -34,10 +34,13 @@ export class OrdersController {
 
   @Get('my-orders')
   @UseGuards(OptionalJwtAuthGuard)
-  findMyOrders(@Req() req: any) {
+  findMyOrders(
+    @Req() req: any,
+    @Query('orderIds') orderIds?: string,
+    @Query('userIdTemp') userIdTemp?: string,
+  ) {
     const user: User | undefined = req.user;
-    if (!user) return [];
-    return this.ordersService.findMyOrders(user);
+    return this.ordersService.findMyOrders(user, orderIds, userIdTemp);
   }
 
   @Get('pending-deliveries')

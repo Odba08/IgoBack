@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, IsNull } from 'typeorm';
+import { Repository, DataSource, IsNull, In } from 'typeorm';
 
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Order } from './entities/order.entity';
@@ -506,11 +506,32 @@ export class OrdersService {
     return orders;
   }
 
-  findMyOrders(user: User) {
+  async findMyOrders(user?: User, orderIdsStr?: string, userIdTemp?: string) {
+    const whereConditions: any[] = [];
+
+    if (user && user.id) {
+      whereConditions.push({ user: { id: user.id } });
+    }
+
+    if (orderIdsStr) {
+      const ids = orderIdsStr.split(',').map(id => id.trim()).filter(id => id.length > 0);
+      if (ids.length > 0) {
+        whereConditions.push({ id: In(ids) });
+      }
+    }
+
+    if (userIdTemp && userIdTemp.trim()) {
+      whereConditions.push({ userIdTemp: userIdTemp.trim() });
+    }
+
+    if (whereConditions.length === 0) {
+      return [];
+    }
+
     return this.orderRepository.find({
-        where: { user: { id: user.id } },
-        order: { createdAt: 'DESC' },
-        relations: ['items', 'business', 'deliveryUser']
+      where: whereConditions,
+      order: { createdAt: 'DESC' },
+      relations: ['items', 'business', 'deliveryUser', 'user']
     });
   }
 
