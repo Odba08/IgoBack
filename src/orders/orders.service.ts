@@ -98,8 +98,10 @@ export class OrdersService {
       isInsured
     );
 
-    // ⚡ BIFURCACIÓN: Si no hay items (Favor/Taxi), se guarda la orden de manera simplificada
+    // ⚡ BIFURCACIÓN: Si no hay items (Favor/Taxi/Moto), se guarda la orden de manera simplificada
     if (!items || items.length === 0) {
+      const defaultCategory = category || (shippingType === 'Carro' ? 'IgoTaxi' : (shippingType === 'Moto' ? 'IgoFavor' : 'IgoFavor'));
+      const isDirectDriver = defaultCategory === 'IgoTaxi' || defaultCategory === 'IgoMoto' || paymentRecipient === 'Pago Conductor';
       const order = this.orderRepository.create({
           business,
           user: user || null,
@@ -114,15 +116,16 @@ export class OrdersService {
           totalItems: 0,
           deliveryFee: deliveryFee,
           totalAmount: deliveryFee,
-          category: category || (shippingType === 'Carro' ? 'IgoTaxi' : 'IgoFavor'),
-          shippingType: shippingType || 'Moto',
-          paymentRecipient: paymentRecipient || 'Pago IGO',
+          category: defaultCategory,
+          shippingType: shippingType || (defaultCategory === 'IgoTaxi' ? 'Carro' : 'Moto'),
+          paymentRecipient: paymentRecipient || (isDirectDriver ? 'Pago Conductor' : 'Pago IGO'),
+          driverStage: 'TO_PICKUP',
           packageValue,
           packageSize,
           isInsured: isInsured || false,
           paymentCaptureUrl,
           paymentReference,
-          paymentMethod: paymentMethod || 'PAGO_MOVIL',
+          paymentMethod: paymentMethod || (isDirectDriver ? 'PAGO_CONDUCTOR' : 'PAGO_MOVIL'),
       });
 
       await this.orderRepository.save(order);
@@ -473,37 +476,43 @@ export class OrdersService {
   }
 
   async findPendingDeliveries(user?: User) {
-    const whereClause: any = {
-      deliveryUser: IsNull(),
-      isPaid: true
-    };
+    const isWorker = user && (user.roles.includes('empleado') || user.roles.includes('worker'));
+    const vehicle = user?.vehicle || 'Moto';
 
-    if (user && (user.roles.includes('empleado') || user.roles.includes('worker'))) {
-      const vehicle = user.vehicle || 'Moto';
+    const qb = this.orderRepository.createQueryBuilder('order')
+      .leftJoinAndSelect('order.business', 'business')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.items', 'items')
+      .where('order.deliveryUserId IS NULL')
+      .andWhere('order.status NOT IN (:...excludedStatuses)', { excludedStatuses: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] });
+
+    if (isWorker) {
       if (vehicle === 'Carro') {
-        whereClause.shippingType = 'Carro';
-      } else if (vehicle === 'Pickups') {
-        whereClause.shippingType = 'Pickup';
+        qb.andWhere('order.shippingType = :shippingType', { shippingType: 'Carro' });
+      } else if (vehicle === 'Pickups' || vehicle === 'Pickup') {
+        qb.andWhere('order.shippingType IN (:...shippingTypes)', { shippingTypes: ['Pickup', 'Carro'] });
       } else {
-        whereClause.shippingType = 'Moto';
+        qb.andWhere("(order.shippingType = 'Moto' OR order.shippingType = 'Motorizado' OR order.shippingType IS NULL)");
+        qb.andWhere("order.category != 'IgoTaxi'");
       }
     }
 
-    const orders = await this.orderRepository.find({
-      where: whereClause,
-      order: { createdAt: 'DESC' },
-      relations: ['items', 'business', 'user']
-    });
-
-    // Exclude IgoTaxi orders for users who don't have 'Carro' as vehicle
-    if (user && (user.roles.includes('empleado') || user.roles.includes('worker'))) {
-      const vehicle = user.vehicle || 'Moto';
-      if (vehicle !== 'Carro') {
-        return orders.filter(o => o.category !== 'IgoTaxi');
+    // Regla de Despacho Inmediato:
+    // Los pedidos de tienda normales requieren isPaid = true.
+    // Los servicios punto a punto / traslados (IgoFavor, IgoTaxi, IgoMoto) o cualquier pedido con pago al conductor
+    // están DISPONIBLES INMEDIATAMENTE para el chofer sin requerir confirmación previa de pago en panel admin.
+    qb.andWhere(
+      '(order.isPaid = true OR order.category IN (:...directCategories) OR order.paymentRecipient IN (:...directRecipients) OR order.paymentMethod IN (:...directMethods))',
+      {
+        directCategories: ['IgoFavor', 'IgoTaxi', 'IgoMoto', 'Favor', 'Taxi', 'Moto', 'Envíos'],
+        directRecipients: ['Pago Conductor', 'DIRECT_DRIVER'],
+        directMethods: ['PAGO_CONDUCTOR', 'EFECTIVO']
       }
-    }
+    );
 
-    return orders;
+    qb.orderBy('order.createdAt', 'DESC');
+
+    return await qb.getMany();
   }
 
   async findMyOrders(user?: User, orderIdsStr?: string, userIdTemp?: string) {
@@ -543,6 +552,7 @@ export class OrdersService {
     if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
     
     const prevStatus = order.status;
+    const prevStage = order.driverStage;
 
     if (updateOrderDto.status) {
       // Regla de Oro: Evitar revertir un pedido completado (DELIVERED/CANCELLED) a estados anteriores por sobreescritura concurrente
@@ -617,18 +627,47 @@ export class OrdersService {
     if (updateOrderDto.supportTicketReason !== undefined) order.supportTicketReason = updateOrderDto.supportTicketReason;
     if (updateOrderDto.supportTicketComment !== undefined) order.supportTicketComment = updateOrderDto.supportTicketComment;
     
+    if (updateOrderDto.driverStage !== undefined) {
+      order.driverStage = updateOrderDto.driverStage;
+    }
+
     const savedOrder = await this.orderRepository.save(order);
 
     // Notificación Socket en tiempo real
     this.ordersGateway.notifyOrderUpdated(savedOrder);
 
-    // Disparar Notificación Push al cliente si cambió de estado y tiene token
-    if (order.user?.pushToken && updateOrderDto.status && updateOrderDto.status !== prevStatus) {
-      this.notificationsService.notifyOrderStatusUpdate(
-        order.user.pushToken,
-        order.id,
-        order.status,
-      ).catch(() => null);
+    // Disparar Notificación Push al cliente según cambio de etapa o estado
+    if (order.user?.pushToken) {
+      if (updateOrderDto.driverStage && updateOrderDto.driverStage !== prevStage) {
+        if (updateOrderDto.driverStage === 'ARRIVED_PICKUP') {
+          this.notificationsService.sendPushNotification({
+            to: order.user.pushToken,
+            title: '📍 ¡Repartidor en el local!',
+            body: `El repartidor ha llegado a retirar tu pedido #${String(order.orderNumber).padStart(4, '0')}.`,
+            data: { orderId: order.id, driverStage: 'ARRIVED_PICKUP' },
+          }).catch(() => null);
+        } else if (updateOrderDto.driverStage === 'ON_THE_WAY') {
+          this.notificationsService.sendPushNotification({
+            to: order.user.pushToken,
+            title: '🛵 ¡Tu pedido va en camino!',
+            body: `El repartidor ya recogió tu pedido #${String(order.orderNumber).padStart(4, '0')} y va hacia tu dirección.`,
+            data: { orderId: order.id, driverStage: 'ON_THE_WAY' },
+          }).catch(() => null);
+        } else if (updateOrderDto.driverStage === 'ARRIVED_DESTINATION') {
+          this.notificationsService.sendPushNotification({
+            to: order.user.pushToken,
+            title: '📍 ¡Tu repartidor llegó!',
+            body: `El repartidor está afuera de tu ubicación con el pedido #${String(order.orderNumber).padStart(4, '0')}.`,
+            data: { orderId: order.id, driverStage: 'ARRIVED_DESTINATION' },
+          }).catch(() => null);
+        }
+      } else if (updateOrderDto.status && updateOrderDto.status !== prevStatus) {
+        this.notificationsService.notifyOrderStatusUpdate(
+          order.user.pushToken,
+          order.id,
+          order.status,
+        ).catch(() => null);
+      }
     }
 
     return savedOrder;

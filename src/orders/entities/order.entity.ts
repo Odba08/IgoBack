@@ -57,6 +57,10 @@ export class Order {
     @Column('boolean', { default: false })
     isPaid: boolean;
 
+    // Etapa del repartidor: 'TO_PICKUP' | 'ARRIVED_PICKUP' | 'ON_THE_WAY' | 'ARRIVED_DESTINATION' | 'DELIVERED'
+    @Column('text', { nullable: true, default: 'TO_PICKUP' })
+    driverStage?: string;
+
     // --- INFORMACIÓN DE ENTREGA (GEOLOCALIZACIÓN) ---
     @Column('float', { nullable: true })
     deliveryLat: number;

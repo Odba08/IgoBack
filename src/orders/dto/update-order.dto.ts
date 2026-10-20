@@ -12,6 +12,10 @@ export class UpdateOrderDto {
   @IsOptional()
   isPaid?: boolean;
 
+  @IsString()
+  @IsOptional()
+  driverStage?: string;
+
   @IsOptional()
   deliveryUserId?: string | null;
 
