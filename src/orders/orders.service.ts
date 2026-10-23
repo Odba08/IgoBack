@@ -143,6 +143,7 @@ export class OrdersService {
       }
 
       return { 
+          id: order.id,
           orderId: String(order.orderNumber).padStart(4, '0'), 
           status: 'CREATED',
           totalToPay: order.totalAmount,
@@ -247,7 +248,8 @@ export class OrdersService {
         }
 
        return { 
-            orderId: String(order.orderNumber).padStart(4, '0'), 
+            id: order.id,
+          orderId: String(order.orderNumber).padStart(4, '0'), 
             status: 'CREATED',
             totalToPay: order.totalAmount,
             distance: `${routeData.distance.toFixed(2)} km`,
@@ -525,7 +527,15 @@ export class OrdersService {
     if (orderIdsStr) {
       const ids = orderIdsStr.split(',').map(id => id.trim()).filter(id => id.length > 0);
       if (ids.length > 0) {
-        whereConditions.push({ id: In(ids) });
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const uuidIds = ids.filter(id => uuidRegex.test(id));
+        const numericIds = ids.filter(id => /^\d+$/.test(id)).map(id => parseInt(id, 10));
+        if (uuidIds.length > 0) {
+          whereConditions.push({ id: In(uuidIds) });
+        }
+        if (numericIds.length > 0) {
+          whereConditions.push({ orderNumber: In(numericIds) });
+        }
       }
     }
 
@@ -546,7 +556,11 @@ export class OrdersService {
 
   async update(id: string, updateOrderDto: UpdateOrderDto) { 
     const order = await this.orderRepository.findOne({ 
-      where: { id },
+      where: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        ? { id }
+        : /^\d+$/.test(id)
+        ? { orderNumber: parseInt(id, 10) }
+        : { id: '00000000-0000-0000-0000-000000000000' },
       relations: ['items', 'business', 'user', 'deliveryUser'] 
     });
     if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
@@ -676,7 +690,11 @@ export class OrdersService {
   // --- ASIGNACIÓN RÁPIDA DE REPARTIDOR (DESDE PANEL ADMIN) ---
   async assignDriver(id: string, deliveryUserId: string | null) {
     const order = await this.orderRepository.findOne({
-      where: { id },
+      where: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        ? { id }
+        : /^\d+$/.test(id)
+        ? { orderNumber: parseInt(id, 10) }
+        : { id: '00000000-0000-0000-0000-000000000000' },
       relations: ['items', 'business', 'user', 'deliveryUser'],
     });
     if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
@@ -716,7 +734,11 @@ export class OrdersService {
   // --- VERIFICACIÓN DE PAGO POR EL ADMIN ---
   async verifyPayment(id: string, isPaid: boolean) {
     const order = await this.orderRepository.findOne({
-      where: { id },
+      where: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        ? { id }
+        : /^\d+$/.test(id)
+        ? { orderNumber: parseInt(id, 10) }
+        : { id: '00000000-0000-0000-0000-000000000000' },
       relations: ['items', 'business', 'user', 'deliveryUser'],
     });
     if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
@@ -786,7 +808,11 @@ export class OrdersService {
 
   async findOne(id: string) {
     const order = await this.orderRepository.findOne({ 
-      where: { id },
+      where: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        ? { id }
+        : /^\d+$/.test(id)
+        ? { orderNumber: parseInt(id, 10) }
+        : { id: '00000000-0000-0000-0000-000000000000' },
       relations: ['items', 'business', 'user', 'deliveryUser']
     });
     if (!order) throw new NotFoundException(`Orden ${id} no encontrada`);
@@ -803,7 +829,11 @@ export class OrdersService {
     },
   ) {
     const order = await this.orderRepository.findOne({
-      where: { id },
+      where: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        ? { id }
+        : /^\d+$/.test(id)
+        ? { orderNumber: parseInt(id, 10) }
+        : { id: '00000000-0000-0000-0000-000000000000' },
       relations: ['business', 'deliveryUser'],
     });
 
@@ -864,7 +894,11 @@ export class OrdersService {
     },
   ) {
     const order = await this.orderRepository.findOne({
-      where: { id },
+      where: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        ? { id }
+        : /^\d+$/.test(id)
+        ? { orderNumber: parseInt(id, 10) }
+        : { id: '00000000-0000-0000-0000-000000000000' },
       relations: ['business', 'user', 'deliveryUser'],
     });
 
