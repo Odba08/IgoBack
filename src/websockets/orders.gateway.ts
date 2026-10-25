@@ -147,12 +147,14 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       senderName: string;
       senderRole: string; // 'client' | 'driver' | 'admin'
       text: string;
+      id?: string;
+      timestamp?: string;
     },
   ) {
     const payload = {
       ...data,
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      timestamp: new Date().toISOString(),
+      id: data.id || `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      timestamp: data.timestamp || new Date().toISOString(),
     };
 
     this.logger.log(`💬 Mensaje en Orden #${data.orderId} de ${data.senderName} (${data.senderRole}): ${data.text}`);
@@ -161,6 +163,37 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.emit(`order:${data.orderId}:message`, payload);
     // Y emitir un evento general para que la app o admin panel lo capturen
     this.server.emit('order:chat_message', payload);
+    return payload;
+  }
+
+  // Enviar mensaje de soporte directo con Administrador
+  @SubscribeMessage('support:send_message')
+  handleSupportSendMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody()
+    data: {
+      userId: string;
+      userName: string;
+      senderId: string;
+      senderName: string;
+      senderRole: string; // 'client' | 'admin'
+      text: string;
+      id?: string;
+      timestamp?: string;
+    },
+  ) {
+    const payload = {
+      ...data,
+      id: data.id || `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      timestamp: data.timestamp || new Date().toISOString(),
+    };
+
+    this.logger.log(`🎧 Soporte IGO - ${data.userName} (${data.senderRole}): ${data.text}`);
+
+    // Emitir al canal personal del usuario
+    this.server.emit(`support:${data.userId}:message`, payload);
+    // Y evento global para que el admin dashboard lo capture
+    this.server.emit('support:chat_message', payload);
     return payload;
   }
 

@@ -18,25 +18,100 @@ export class AuthService {
  ){}
 
 
-async login (loginUserDto: LoginUserDto) {
-  const {password, email} = loginUserDto;
+  private readonly resetCodeStore = new Map<string, { code: string; expires: number }>();
 
-  const user = await this.usersService.findOneByEmail(email);
+  async login(loginUserDto: LoginUserDto) {
+    const { password, email } = loginUserDto;
+    const cleanEmail = (email || '').toLowerCase().trim();
 
-  if (!user || !bcrypt.compareSync(password,user.password)){
-    throw new UnauthorizedException('Invalid credentials');
+    const user = await this.usersService.findOneByEmail(cleanEmail);
+
+    if (!user || !bcrypt.compareSync(password, user.password)) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        fullname: user.fullName,
+        roles: user.roles,
+        avatarUrl: user.avatarUrl,
+        phoneNumber: user.phoneNumber,
+        identityStatus: user.identityStatus,
+      },
+      token: this.jwtService.sign({ id: user.id }),
+    };
   }
 
-  return {
-    user : {
-      id : user.id,
-      email : user.email,
-      fullname : user.fullName,
-      roles : user.roles,
-      avatarUrl: user.avatarUrl
-    },
-    token : this.jwtService.sign({id : user.id})
-  };
+  async requestPasswordReset(rawEmail: string) {
+    const email = (rawEmail || '').toLowerCase().trim();
+    if (!email) {
+      throw new UnauthorizedException('Email requerido');
+    }
+
+    const user = await this.usersService.findOneByEmail(email);
+    if (!user) {
+      // Respondemos éxito genérico por seguridad para evitar enumeración de correos
+      return {
+        success: true,
+        message: 'Si el correo está registrado, se ha enviado un código de verificación.',
+      };
+    }
+
+    // Generar código numérico de 6 dígitos
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = Date.now() + 15 * 60 * 1000; // 15 minutos
+
+    this.resetCodeStore.set(email, { code, expires });
+
+    console.log(`\n======================================================`);
+    console.log(`🔐 CÓDIGO DE RECUPERACIÓN IGO PARA [${email}]: ${code}`);
+    console.log(`======================================================\n`);
+
+    return {
+      success: true,
+      message: 'Código de verificación generado y enviado a tu correo.',
+      // En entorno de desarrollo incluimos el código para pruebas ágiles
+      devCode: code,
+    };
+  }
+
+  async resetPasswordWithCode(rawEmail: string, code: string, newPass: string) {
+    const email = (rawEmail || '').toLowerCase().trim();
+    if (!email || !code || !newPass) {
+      throw new UnauthorizedException('Todos los campos son obligatorios');
+    }
+
+    if (newPass.length < 6) {
+      throw new UnauthorizedException('La contraseña debe tener al menos 6 caracteres');
+    }
+
+    const record = this.resetCodeStore.get(email);
+    if (!record || record.expires < Date.now()) {
+      throw new UnauthorizedException('El código ha expirado o no es válido. Solicita uno nuevo.');
+    }
+
+    if (record.code !== code.trim()) {
+      throw new UnauthorizedException('Código de verificación incorrecto');
+    }
+
+    const user = await this.usersService.findOneByEmail(email);
+    if (!user) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+
+    // Actualizar contraseña
+    const hashedPassword = bcrypt.hashSync(newPass, 10);
+    await this.usersService.update(user.id, { password: hashedPassword } as any);
+
+    // Limpiar código usado
+    this.resetCodeStore.delete(email);
+
+    return {
+      success: true,
+      message: '¡Contraseña restablecida correctamente! Ya puedes iniciar sesión.',
+    };
   }
 
   async googleLogin(token: string) {

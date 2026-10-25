@@ -51,6 +51,36 @@ export class User {
   })
   pushToken: string;
 
+  @Column('text', {
+    nullable: true,
+  })
+  phoneNumber: string;
+
+  @Column('text', {
+    nullable: true,
+  })
+  cedulaNumber: string;
+
+  @Column('text', {
+    nullable: true,
+  })
+  residenceAddress: string;
+
+  @Column('text', {
+    nullable: true,
+  })
+  cedulaPhotoUrl: string;
+
+  @Column('text', {
+    nullable: true,
+  })
+  facePhotoUrl: string;
+
+  @Column('text', {
+    default: 'UNVERIFIED', // 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED'
+  })
+  identityStatus: string;
+
   @OneToMany(() => Order, (order) => order.user)
   orders: Order[];
 

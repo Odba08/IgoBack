@@ -16,10 +16,24 @@ export class AuthController {
    return this.authService.login(loginUserDto);
  }
 
- @Post('google')
- async googleLogin(@Body('token') token: string) {
-   return this.authService.googleLogin(token);
- }
+  @Post('google')
+  async googleLogin(@Body('token') token: string) {
+    return this.authService.googleLogin(token);
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body('email') email: string) {
+    return this.authService.requestPasswordReset(email);
+  }
+
+  @Post('reset-password')
+  async resetPassword(
+    @Body('email') email: string,
+    @Body('code') code: string,
+    @Body('newPassword') newPass: string,
+  ) {
+    return this.authService.resetPasswordWithCode(email, code, newPass);
+  }
 
  @Get('profile')
  @UseGuards(AuthGuard('jwt'))

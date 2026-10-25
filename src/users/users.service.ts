@@ -41,8 +41,9 @@ export class UsersService {
   }
 
   async findOneByEmail(email: string) {
+    const cleanEmail = (email || '').toLowerCase().trim();
     return this.userRepository.createQueryBuilder('user')
-      .where('user.email = :email', { email })
+      .where('LOWER(user.email) = :email', { email: cleanEmail })
       .addSelect('user.password') 
       .getOne(); 
   }
