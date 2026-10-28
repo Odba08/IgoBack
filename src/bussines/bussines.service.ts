@@ -169,6 +169,21 @@ export class BussinessService {
       throw new NotFoundException(`Business with id ${businessId} not found`);
     }
 
+    const trimmedTitle = productDetails.title?.trim();
+    if (trimmedTitle) {
+      const existingProduct = await this.productRepository
+        .createQueryBuilder('product')
+        .where('product.business_id = :businessId', { businessId })
+        .andWhere('LOWER(TRIM(product.title)) = LOWER(:title)', { title: trimmedTitle })
+        .getOne();
+
+      if (existingProduct) {
+        throw new BadRequestException(
+          `Ya existe un producto con el nombre "${trimmedTitle}" en este negocio.`
+        );
+      }
+    }
+
     const product = this.productRepository.create({
       ...productDetails,
       isApproved: createProductDto.isApproved !== undefined ? createProductDto.isApproved : true,
@@ -239,6 +254,22 @@ export class BussinessService {
       throw new NotFoundException(
         `Product with id ${productId} not found in business ${businessId}`,
       );
+    }
+
+    if (toUpdate.title) {
+      const trimmedTitle = toUpdate.title.trim();
+      const existingProduct = await this.productRepository
+        .createQueryBuilder('product')
+        .where('product.business_id = :businessId', { businessId })
+        .andWhere('product.id != :productId', { productId })
+        .andWhere('LOWER(TRIM(product.title)) = LOWER(:title)', { title: trimmedTitle })
+        .getOne();
+
+      if (existingProduct) {
+        throw new BadRequestException(
+          `Ya existe otro producto con el nombre "${trimmedTitle}" en este negocio.`
+        );
+      }
     }
 
     Object.assign(product, toUpdate);

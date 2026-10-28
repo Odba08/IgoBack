@@ -40,6 +40,21 @@ export class ProductsService {
         if (!business) {
           throw new NotFoundException(`Business with id ${business_id} not found`);
         }
+
+        if (productDetails.title) {
+          const trimmedTitle = productDetails.title.trim();
+          const existingProduct = await this.productRepository
+            .createQueryBuilder('product')
+            .where('product.business_id = :businessId', { businessId: business_id })
+            .andWhere('LOWER(TRIM(product.title)) = LOWER(:title)', { title: trimmedTitle })
+            .getOne();
+
+          if (existingProduct) {
+            throw new BadRequestException(
+              `Ya existe un producto con el nombre "${trimmedTitle}" en este negocio.`
+            );
+          }
+        }
       }
 
       const product = this.productRepository.create({
