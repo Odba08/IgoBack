@@ -94,9 +94,10 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   notifyOrderCreated(order: any) {
     if (this.server) {
       this.server.emit('order:created', order);
-      if (order.business?.id) {
-        this.server.emit(`business:${order.business.id}:new_order`, order);
-        this.server.emit(`business:${order.business.id}:order_updated`, order);
+      const bizId = order.business?.id || order.businessId || (typeof order.business === 'string' ? order.business : null);
+      if (bizId) {
+        this.server.emit(`business:${bizId}:new_order`, order);
+        this.server.emit(`business:${bizId}:order_updated`, order);
       }
     }
   }
@@ -106,8 +107,9 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (this.server) {
       this.server.emit('order:updated', order);
       this.server.emit(`order:${order.id}:updated`, order);
-      if (order.business?.id) {
-        this.server.emit(`business:${order.business.id}:order_updated`, order);
+      const bizId = order.business?.id || order.businessId || (typeof order.business === 'string' ? order.business : null);
+      if (bizId) {
+        this.server.emit(`business:${bizId}:order_updated`, order);
       }
     }
   }
@@ -117,9 +119,10 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (this.server) {
       this.server.emit('order:payment_verified', order);
       this.server.emit(`order:${order.id}:paid`, order);
-      if (order.business?.id) {
-        this.server.emit(`business:${order.business.id}:payment_verified`, order);
-        this.server.emit(`business:${order.business.id}:order_updated`, order);
+      const bizId = order.business?.id || order.businessId || (typeof order.business === 'string' ? order.business : null);
+      if (bizId) {
+        this.server.emit(`business:${bizId}:payment_verified`, order);
+        this.server.emit(`business:${bizId}:order_updated`, order);
       }
     }
   }
