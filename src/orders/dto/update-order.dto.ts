@@ -16,6 +16,10 @@ export class UpdateOrderDto {
   @IsOptional()
   driverStage?: string;
 
+  @IsString()
+  @IsOptional()
+  pickupCode?: string;
+
   @IsOptional()
   deliveryUserId?: string | null;
 
