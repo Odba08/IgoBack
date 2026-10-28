@@ -71,11 +71,22 @@ export class NotificationsService {
         title = '¡Pedido Confirmado! ✅';
         body = `Tu pedido #${orderId.slice(0, 8)} ha sido aceptado y confirmado por el comercio.`;
         break;
+      case 'paid':
+      case 'pagado':
+        title = '¡Pago Confirmado! 🎉';
+        body = `Tu pedido #${orderId.slice(0, 8)} ha sido pagado. Esperando preparación del comercio.`;
+        break;
       case 'preparing':
       case 'preparando':
       case 'en preparacion':
         title = '🍳 ¡En Preparación!';
         body = `El comercio está preparando los productos de tu pedido #${orderId.slice(0, 8)}.`;
+        break;
+      case 'ready':
+      case 'listo':
+      case 'preparado':
+        title = '📦 ¡Pedido Listo!';
+        body = `Tu pedido #${orderId.slice(0, 8)} ya está listo para entrega.`;
         break;
       case 'dispatched':
       case 'en camino':

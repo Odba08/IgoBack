@@ -60,6 +60,11 @@ export class OrdersController {
     return this.ordersService.findAll();
   }
 
+  @Get('business/:businessId')
+  findByBusiness(@Param('businessId') businessId: string) {
+    return this.ordersService.findByBusiness(businessId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.ordersService.findOne(id);

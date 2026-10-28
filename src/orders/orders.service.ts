@@ -235,8 +235,15 @@ export class OrdersService {
         await queryRunner.manager.save(order);
         await queryRunner.commitTransaction();
 
+        // Cargar orden completa con relaciones para socket y notificaciones
+        const fullOrder = await this.orderRepository.findOne({
+          where: { id: order.id },
+          relations: ['items', 'business', 'user', 'deliveryUser'],
+        });
+        const orderToEmit = fullOrder || order;
+
         // Notificación Socket en tiempo real
-        this.ordersGateway.notifyOrderCreated(order);
+        this.ordersGateway.notifyOrderCreated(orderToEmit);
 
         if (user?.pushToken) {
           this.notificationsService.sendPushNotification({
@@ -244,6 +251,20 @@ export class OrdersService {
             title: '¡Recibimos tu pedido! 🛍️',
             body: `Tu orden #${String(order.orderNumber).padStart(4, '0')} por $${order.totalAmount.toFixed(2)} ha sido creada con éxito.`,
             data: { orderId: order.id, status: 'CREATED' },
+          }).catch(() => null);
+        }
+
+        // Notificar al dueño del negocio por Push Notification
+        if (business && business.ownerId) {
+          this.userRepository.findOne({ where: { id: business.ownerId } }).then((owner) => {
+            if (owner?.pushToken) {
+              this.notificationsService.sendPushNotification({
+                to: owner.pushToken,
+                title: '¡Nuevo Pedido Recibido! 🛍️',
+                body: `Has recibido la orden #${String(order.orderNumber).padStart(4, '0')} por $${order.totalAmount.toFixed(2)}.`,
+                data: { orderId: order.id, status: 'PENDING', type: 'BUSINESS_ORDER', businessId: business.id },
+              }).catch(() => null);
+            }
           }).catch(() => null);
         }
 
@@ -477,6 +498,14 @@ export class OrdersService {
     });
   }
 
+  async findByBusiness(businessId: string) {
+    return this.orderRepository.find({
+      where: { business: { id: businessId } },
+      order: { createdAt: 'DESC' },
+      relations: ['items', 'business', 'user', 'deliveryUser'],
+    });
+  }
+
   async findPendingDeliveries(user?: User) {
     const isWorker = user && (user.roles.includes('empleado') || user.roles.includes('worker'));
     const vehicle = user?.vehicle || 'Moto';
@@ -576,9 +605,14 @@ export class OrdersService {
       } else {
         order.status = updateOrderDto.status;
         
-        // Si cambia de READY / PENDING / PAID a ON_WAY, setear acceptedAt
-        if (updateOrderDto.status === OrderStatus.ON_WAY && prevStatus !== OrderStatus.ON_WAY) {
+        // Si el comercio acepta el pedido (pasa a PREPARING)
+        if (updateOrderDto.status === OrderStatus.PREPARING && !order.acceptedAt) {
           order.acceptedAt = new Date();
+        }
+
+        // Si cambia de READY / PENDING / PAID a ON_WAY, setear acceptedAt si aún no lo tenía
+        if (updateOrderDto.status === OrderStatus.ON_WAY && prevStatus !== OrderStatus.ON_WAY) {
+          if (!order.acceptedAt) order.acceptedAt = new Date();
         }
         
         // Si cambia a DELIVERED, setear completedAt
@@ -647,8 +681,14 @@ export class OrdersService {
 
     const savedOrder = await this.orderRepository.save(order);
 
+    const fullOrder = await this.orderRepository.findOne({
+      where: { id: savedOrder.id },
+      relations: ['items', 'business', 'user', 'deliveryUser'],
+    });
+    const orderToEmit = fullOrder || savedOrder;
+
     // Notificación Socket en tiempo real
-    this.ordersGateway.notifyOrderUpdated(savedOrder);
+    this.ordersGateway.notifyOrderUpdated(orderToEmit);
 
     // Disparar Notificación Push al cliente según cambio de etapa o estado
     if (order.user?.pushToken) {
@@ -748,9 +788,6 @@ export class OrdersService {
       order.status = OrderStatus.PAID;
       order.verifiedAt = new Date();
 
-      // Notificar a todos vía WebSocket que el pedido ya fue pagado/confirmado y está listo para despachar
-      this.ordersGateway.notifyPaymentVerified(order);
-
       if (order.user?.pushToken) {
         this.notificationsService.sendPushNotification({
           to: order.user.pushToken,
@@ -759,11 +796,35 @@ export class OrdersService {
           data: { orderId: order.id, status: 'PAID' },
         }).catch(() => null);
       }
+
+      // Notificar al dueño del negocio por Push Notification
+      if (order.business?.ownerId) {
+        this.userRepository.findOne({ where: { id: order.business.ownerId } }).then((owner) => {
+          if (owner?.pushToken) {
+            this.notificationsService.sendPushNotification({
+              to: owner.pushToken,
+              title: '¡Pago Confirmado! 🎉',
+              body: `La orden #${String(order.orderNumber).padStart(4, '0')} ($${order.totalAmount.toFixed(2)}) para tu tienda ${order.business?.name || ''} ha sido pagada. ¡Ya puedes aceptarla y prepararla!`,
+              data: { orderId: order.id, status: 'PAID', type: 'BUSINESS_ORDER', businessId: order.business?.id },
+            }).catch(() => null);
+          }
+        }).catch(() => null);
+      }
     }
 
     const savedOrder = await this.orderRepository.save(order);
-    this.ordersGateway.notifyOrderUpdated(savedOrder);
-    return savedOrder;
+
+    const fullOrder = await this.orderRepository.findOne({
+      where: { id: savedOrder.id },
+      relations: ['items', 'business', 'user', 'deliveryUser'],
+    });
+    const orderToEmit = fullOrder || savedOrder;
+
+    if (isPaid) {
+      this.ordersGateway.notifyPaymentVerified(orderToEmit);
+    }
+    this.ordersGateway.notifyOrderUpdated(orderToEmit);
+    return orderToEmit;
   }
 
   // --- REPORTE DE DEUDAS Y COMISIONES POR COMERCIO ---
