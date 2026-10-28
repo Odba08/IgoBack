@@ -223,7 +223,7 @@ export class OrdersService {
             totalAmount: totalItemsPrice + finalDeliveryFee,
             category: finalCategory,
             shippingType: shippingType || 'Moto',
-            paymentRecipient: paymentRecipient || 'Pago IGO',
+            paymentRecipient: paymentRecipient || (business ? 'Pago Negocio' : 'Pago IGO'),
             packageValue,
             packageSize,
             isInsured: isInsured || false,
@@ -544,36 +544,41 @@ export class OrdersService {
     const totalAmountSum = filtered.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 
     // Agrupación por canal de recaudación (paymentRecipient)
+    // En el modelo de IgoStore, el cliente paga el total (productos + delivery) directamente
+    // a la cuenta bancaria / Pago Móvil del comercio ('Pago Negocio').
+    // Por ende, el comercio recauda el total en su cuenta y adeuda a IGO:
+    // 1. La tarifa de delivery (para pagar al repartidor de IGO).
+    // 2. La comisión porcentual sobre el subtotal de productos.
+    const bizOrders = filtered.filter((o) => o.paymentRecipient !== 'Pago IGO');
     const iGoOrders = filtered.filter((o) => o.paymentRecipient === 'Pago IGO');
-    const bizOrders = filtered.filter((o) => o.paymentRecipient === 'Pago Negocio');
-    const mixOrders = filtered.filter((o) => o.paymentRecipient === 'Mix');
 
     const iGoTotal = iGoOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
     const bizTotal = bizOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-    const mixTotal = mixOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 
     // Porcentaje de comisión asignado a este comercio (por defecto 10%)
     const commissionRate = business.commissionPercentage ?? 10;
     const commissionAmount = itemsSubtotal * (commissionRate / 100);
 
     // Cálculos de liquidación:
-    // igoOwesBizProducts: IGO cobró el total al cliente, por lo que debe transferir el dinero de los productos al negocio
     const igoOwesBizProducts = iGoOrders.reduce((sum, o) => sum + (o.totalItems || 0), 0);
-    // bizOwesIgoDelivery: El negocio cobró el dinero en mano/pago móvil (Pago Negocio), por lo que debe transferir el delivery a IGO
     const bizOwesIgoDelivery = bizOrders.reduce((sum, o) => sum + (o.deliveryFee || 0), 0);
 
-    // Balance neto:
-    // netOwed = igoOwesBizProducts - commissionAmount - bizOwesIgoDelivery
-    // Si netOwed < 0: El negocio debe a IGO la diferencia
-    // Si netOwed > 0: IGO debe al negocio la diferencia
-    const netOwed = igoOwesBizProducts - commissionAmount - bizOwesIgoDelivery;
+    // Deuda que el negocio debe transferir a IGO (Delivery + Comisión)
     const totalBizDebt = bizOwesIgoDelivery + commissionAmount;
+    // Ganancia neta que le queda al negocio por venta de productos tras pagar comisión
+    const bizNetEarnings = itemsSubtotal - commissionAmount;
+
+    // Balance neto: saldo a favor de IGO frente al negocio
+    // Si netOwed < 0: El negocio debe a IGO la diferencia
+    // Si netOwed > 0: IGO debe al negocio la diferencia (solo si IGO recaudó en 'Pago IGO' más de lo adeudado)
+    const netOwed = igoOwesBizProducts - totalBizDebt;
 
     // Ajustes bancarios oficiales de IGO y tasa BCV
     const settings = await this.settingsService.getAllSettings();
     const bcvRate = parseFloat(settings.BCV_RATE || '75.54');
     const amountDueUSD = Math.abs(netOwed);
     const amountDueBs = amountDueUSD * bcvRate;
+    const status = netOwed < 0 ? 'BIZ_OWES_IGO' : netOwed > 0 ? 'IGO_OWES_BIZ' : 'BALANCED';
 
     return {
       business: {
@@ -592,16 +597,17 @@ export class OrdersService {
         itemsSubtotal: parseFloat(itemsSubtotal.toFixed(2)),
         deliverySubtotal: parseFloat(deliverySubtotal.toFixed(2)),
         totalAmountSum: parseFloat(totalAmountSum.toFixed(2)),
+        totalCollectedByBiz: parseFloat(bizTotal.toFixed(2)),
         iGoTotal: parseFloat(iGoTotal.toFixed(2)),
         bizTotal: parseFloat(bizTotal.toFixed(2)),
-        mixTotal: parseFloat(mixTotal.toFixed(2)),
         commissionPercentage: commissionRate,
         commissionAmount: parseFloat(commissionAmount.toFixed(2)),
         igoOwesBizProducts: parseFloat(igoOwesBizProducts.toFixed(2)),
         bizOwesIgoDelivery: parseFloat(bizOwesIgoDelivery.toFixed(2)),
         totalBizDebt: parseFloat(totalBizDebt.toFixed(2)),
+        bizNetEarnings: parseFloat(bizNetEarnings.toFixed(2)),
         netOwed: parseFloat(netOwed.toFixed(2)),
-        status: netOwed < 0 ? 'BIZ_OWES_IGO' : netOwed > 0 ? 'IGO_OWES_BIZ' : 'BALANCED',
+        status,
         amountDueUSD: parseFloat(amountDueUSD.toFixed(2)),
         amountDueBs: parseFloat(amountDueBs.toFixed(2)),
       },
@@ -612,20 +618,29 @@ export class OrdersService {
         name: settings.IGO_PAGO_MOVIL_NAME || 'IGO Delivery C.A.',
         bcvRate,
       },
-      orders: filtered.map((o) => ({
-        id: o.id,
-        orderNumber: o.orderNumber,
-        createdAt: o.createdAt,
-        status: o.status,
-        isPaid: o.isPaid,
-        paymentRecipient: o.paymentRecipient || 'Pago IGO',
-        paymentMethod: o.paymentMethod || 'PAGO_MOVIL',
-        totalItems: parseFloat((o.totalItems || 0).toFixed(2)),
-        deliveryFee: parseFloat((o.deliveryFee || 0).toFixed(2)),
-        totalAmount: parseFloat((o.totalAmount || 0).toFixed(2)),
-        customerName: o.user ? (o.user.fullName || 'Cliente') : 'Cliente',
-        customerPhone: o.user?.phoneNumber || null,
-      })),
+      orders: filtered.map((o) => {
+        const orderItems = parseFloat((o.totalItems || 0).toFixed(2));
+        const orderDelivery = parseFloat((o.deliveryFee || 0).toFixed(2));
+        const orderCommission = parseFloat((orderItems * (commissionRate / 100)).toFixed(2));
+        const orderDebt = parseFloat((orderDelivery + orderCommission).toFixed(2));
+
+        return {
+          id: o.id,
+          orderNumber: o.orderNumber,
+          createdAt: o.createdAt,
+          status: o.status,
+          isPaid: o.isPaid,
+          paymentRecipient: o.paymentRecipient || 'Pago Negocio',
+          paymentMethod: o.paymentMethod || 'PAGO_MOVIL',
+          totalItems: orderItems,
+          deliveryFee: orderDelivery,
+          totalAmount: parseFloat((o.totalAmount || 0).toFixed(2)),
+          commissionAmount: orderCommission,
+          orderDebtToIgo: orderDebt,
+          customerName: o.user ? (o.user.fullName || 'Cliente') : (o.userIdTemp || 'Cliente'),
+          customerPhone: o.user?.phoneNumber || null,
+        };
+      }),
     };
   }
 
