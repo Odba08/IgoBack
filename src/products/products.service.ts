@@ -44,6 +44,7 @@ export class ProductsService {
 
       const product = this.productRepository.create({
         ...productDetails,
+        isApproved: createProductDto.isApproved !== undefined ? createProductDto.isApproved : true,
         images: images.map(image => this.productImageRepository.create({ url: image })),
         business,
         // 2. GUARDAR LA RELACIÓN
@@ -59,7 +60,7 @@ export class ProductsService {
   }
 
   async findAll(paginationDto: PaginationDto) {
-    const { limit = 10, offset = 0 } = paginationDto;
+    const { limit = 200, offset = 0 } = paginationDto;
     const products = await this.productRepository.find({
       where: { isApproved: true },
       take: limit,

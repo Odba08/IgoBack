@@ -66,7 +66,7 @@ export class BussinessService {
   }
     
   async findAllBusiness(paginationDto: PaginationDto) {
-    const { limit = 10, offset = 0 } = paginationDto;
+    const { limit = 100, offset = 0 } = paginationDto;
     return this.businessRepository.find({
       take: limit,
       skip: offset,
@@ -171,6 +171,7 @@ export class BussinessService {
 
     const product = this.productRepository.create({
       ...productDetails,
+      isApproved: createProductDto.isApproved !== undefined ? createProductDto.isApproved : true,
       images: images.map((url) =>
         this.productImageRepository.create({ url }),
       ),
@@ -187,7 +188,7 @@ export class BussinessService {
     businessId: string,
     paginationDto: PaginationDto,
   ) {
-    const { limit = 10, offset = 0 } = paginationDto;
+    const { limit = 500, offset = 0 } = paginationDto;
 
     const business = await this.findBusinessById(businessId);
 
