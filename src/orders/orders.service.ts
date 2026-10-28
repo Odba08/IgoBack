@@ -506,6 +506,129 @@ export class OrdersService {
     });
   }
 
+  // --- CONCILIACIÓN Y BALANCE FINANCIERO DEL COMERCIO (Idéntico al Panel Admin) ---
+  async getBusinessSettlement(businessId: string, startDate?: string, endDate?: string) {
+    const business = await this.businessRepository.findOne({ where: { id: businessId } });
+    if (!business) {
+      throw new NotFoundException(`Comercio con ID ${businessId} no encontrado`);
+    }
+
+    const allOrders = await this.orderRepository.find({
+      where: { business: { id: businessId } },
+      order: { createdAt: 'DESC' },
+      relations: ['items', 'business', 'user', 'deliveryUser'],
+    });
+
+    // Filtramos órdenes pagadas o entregadas (excluyendo canceladas)
+    let filtered = allOrders.filter(
+      (o) => o.status !== OrderStatus.CANCELLED && (o.isPaid || o.status === OrderStatus.DELIVERED)
+    );
+
+    if (startDate) {
+      const start = new Date(startDate);
+      if (!isNaN(start.getTime())) {
+        filtered = filtered.filter((o) => new Date(o.createdAt) >= start);
+      }
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      if (!isNaN(end.getTime())) {
+        end.setHours(23, 59, 59, 999);
+        filtered = filtered.filter((o) => new Date(o.createdAt) <= end);
+      }
+    }
+
+    const totalPaidOrders = filtered.length;
+    const itemsSubtotal = filtered.reduce((sum, o) => sum + (o.totalItems || 0), 0);
+    const deliverySubtotal = filtered.reduce((sum, o) => sum + (o.deliveryFee || 0), 0);
+    const totalAmountSum = filtered.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+    // Agrupación por canal de recaudación (paymentRecipient)
+    const iGoOrders = filtered.filter((o) => o.paymentRecipient === 'Pago IGO');
+    const bizOrders = filtered.filter((o) => o.paymentRecipient === 'Pago Negocio');
+    const mixOrders = filtered.filter((o) => o.paymentRecipient === 'Mix');
+
+    const iGoTotal = iGoOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const bizTotal = bizOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const mixTotal = mixOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+    // Porcentaje de comisión asignado a este comercio (por defecto 10%)
+    const commissionRate = business.commissionPercentage ?? 10;
+    const commissionAmount = itemsSubtotal * (commissionRate / 100);
+
+    // Cálculos de liquidación:
+    // igoOwesBizProducts: IGO cobró el total al cliente, por lo que debe transferir el dinero de los productos al negocio
+    const igoOwesBizProducts = iGoOrders.reduce((sum, o) => sum + (o.totalItems || 0), 0);
+    // bizOwesIgoDelivery: El negocio cobró el dinero en mano/pago móvil (Pago Negocio), por lo que debe transferir el delivery a IGO
+    const bizOwesIgoDelivery = bizOrders.reduce((sum, o) => sum + (o.deliveryFee || 0), 0);
+
+    // Balance neto:
+    // netOwed = igoOwesBizProducts - commissionAmount - bizOwesIgoDelivery
+    // Si netOwed < 0: El negocio debe a IGO la diferencia
+    // Si netOwed > 0: IGO debe al negocio la diferencia
+    const netOwed = igoOwesBizProducts - commissionAmount - bizOwesIgoDelivery;
+    const totalBizDebt = bizOwesIgoDelivery + commissionAmount;
+
+    // Ajustes bancarios oficiales de IGO y tasa BCV
+    const settings = await this.settingsService.getAllSettings();
+    const bcvRate = parseFloat(settings.BCV_RATE || '75.54');
+    const amountDueUSD = Math.abs(netOwed);
+    const amountDueBs = amountDueUSD * bcvRate;
+
+    return {
+      business: {
+        id: business.id,
+        name: business.name,
+        legalName: business.legalName || business.name,
+        rif: business.rif || 'N/A',
+        commissionPercentage: commissionRate,
+      },
+      period: {
+        startDate: startDate || null,
+        endDate: endDate || null,
+      },
+      summary: {
+        totalPaidOrders,
+        itemsSubtotal: parseFloat(itemsSubtotal.toFixed(2)),
+        deliverySubtotal: parseFloat(deliverySubtotal.toFixed(2)),
+        totalAmountSum: parseFloat(totalAmountSum.toFixed(2)),
+        iGoTotal: parseFloat(iGoTotal.toFixed(2)),
+        bizTotal: parseFloat(bizTotal.toFixed(2)),
+        mixTotal: parseFloat(mixTotal.toFixed(2)),
+        commissionPercentage: commissionRate,
+        commissionAmount: parseFloat(commissionAmount.toFixed(2)),
+        igoOwesBizProducts: parseFloat(igoOwesBizProducts.toFixed(2)),
+        bizOwesIgoDelivery: parseFloat(bizOwesIgoDelivery.toFixed(2)),
+        totalBizDebt: parseFloat(totalBizDebt.toFixed(2)),
+        netOwed: parseFloat(netOwed.toFixed(2)),
+        status: netOwed < 0 ? 'BIZ_OWES_IGO' : netOwed > 0 ? 'IGO_OWES_BIZ' : 'BALANCED',
+        amountDueUSD: parseFloat(amountDueUSD.toFixed(2)),
+        amountDueBs: parseFloat(amountDueBs.toFixed(2)),
+      },
+      paymentInfo: {
+        bank: settings.IGO_PAGO_MOVIL_BANK || '0102 - Banco de Venezuela',
+        phone: settings.IGO_PAGO_MOVIL_PHONE || '0412-1234567',
+        id: settings.IGO_PAGO_MOVIL_ID || 'V-12345678',
+        name: settings.IGO_PAGO_MOVIL_NAME || 'IGO Delivery C.A.',
+        bcvRate,
+      },
+      orders: filtered.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        createdAt: o.createdAt,
+        status: o.status,
+        isPaid: o.isPaid,
+        paymentRecipient: o.paymentRecipient || 'Pago IGO',
+        paymentMethod: o.paymentMethod || 'PAGO_MOVIL',
+        totalItems: parseFloat((o.totalItems || 0).toFixed(2)),
+        deliveryFee: parseFloat((o.deliveryFee || 0).toFixed(2)),
+        totalAmount: parseFloat((o.totalAmount || 0).toFixed(2)),
+        customerName: o.user ? (o.user.fullName || 'Cliente') : 'Cliente',
+        customerPhone: o.user?.phoneNumber || null,
+      })),
+    };
+  }
+
   async findPendingDeliveries(user?: User) {
     const isWorker = user && (user.roles.includes('empleado') || user.roles.includes('worker'));
     const vehicle = user?.vehicle || 'Moto';
