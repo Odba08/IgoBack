@@ -120,6 +120,7 @@ export class OrdersService {
           shippingType: shippingType || (defaultCategory === 'IgoTaxi' ? 'Carro' : 'Moto'),
           paymentRecipient: paymentRecipient || (isDirectDriver ? 'Pago Conductor' : 'Pago IGO'),
           driverStage: 'TO_PICKUP',
+          pickupCode: Math.floor(1000 + Math.random() * 9000).toString(),
           packageValue,
           packageSize,
           isInsured: isInsured || false,
@@ -223,7 +224,8 @@ export class OrdersService {
             totalAmount: totalItemsPrice + finalDeliveryFee,
             category: finalCategory,
             shippingType: shippingType || 'Moto',
-            paymentRecipient: paymentRecipient || 'Pago IGO',
+            paymentRecipient: paymentRecipient || (business ? 'Pago Negocio' : 'Pago IGO'),
+            pickupCode: Math.floor(1000 + Math.random() * 9000).toString(),
             packageValue,
             packageSize,
             isInsured: isInsured || false,
@@ -235,8 +237,15 @@ export class OrdersService {
         await queryRunner.manager.save(order);
         await queryRunner.commitTransaction();
 
+        // Cargar orden completa con relaciones para socket y notificaciones
+        const fullOrder = await this.orderRepository.findOne({
+          where: { id: order.id },
+          relations: ['items', 'business', 'user', 'deliveryUser'],
+        });
+        const orderToEmit = fullOrder || order;
+
         // Notificación Socket en tiempo real
-        this.ordersGateway.notifyOrderCreated(order);
+        this.ordersGateway.notifyOrderCreated(orderToEmit);
 
         if (user?.pushToken) {
           this.notificationsService.sendPushNotification({
@@ -244,6 +253,20 @@ export class OrdersService {
             title: '¡Recibimos tu pedido! 🛍️',
             body: `Tu orden #${String(order.orderNumber).padStart(4, '0')} por $${order.totalAmount.toFixed(2)} ha sido creada con éxito.`,
             data: { orderId: order.id, status: 'CREATED' },
+          }).catch(() => null);
+        }
+
+        // Notificar al dueño del negocio por Push Notification
+        if (business && business.ownerId) {
+          this.userRepository.findOne({ where: { id: business.ownerId } }).then((owner) => {
+            if (owner?.pushToken) {
+              this.notificationsService.sendPushNotification({
+                to: owner.pushToken,
+                title: '¡Nuevo Pedido Recibido! 🛍️',
+                body: `Has recibido la orden #${String(order.orderNumber).padStart(4, '0')} por $${order.totalAmount.toFixed(2)}.`,
+                data: { orderId: order.id, status: 'PENDING', type: 'BUSINESS_ORDER', businessId: business.id },
+              }).catch(() => null);
+            }
           }).catch(() => null);
         }
 
@@ -477,6 +500,152 @@ export class OrdersService {
     });
   }
 
+  async findByBusiness(businessId: string) {
+    return this.orderRepository.find({
+      where: { business: { id: businessId } },
+      order: { createdAt: 'DESC' },
+      relations: ['items', 'business', 'user', 'deliveryUser'],
+    });
+  }
+
+  // --- CONCILIACIÓN Y BALANCE FINANCIERO DEL COMERCIO (Idéntico al Panel Admin) ---
+  async getBusinessSettlement(businessId: string, startDate?: string, endDate?: string) {
+    const business = await this.businessRepository.findOne({ where: { id: businessId } });
+    if (!business) {
+      throw new NotFoundException(`Comercio con ID ${businessId} no encontrado`);
+    }
+
+    const allOrders = await this.orderRepository.find({
+      where: { business: { id: businessId } },
+      order: { createdAt: 'DESC' },
+      relations: ['items', 'business', 'user', 'deliveryUser'],
+    });
+
+    // Filtramos órdenes pagadas o entregadas (excluyendo canceladas)
+    let filtered = allOrders.filter(
+      (o) => o.status !== OrderStatus.CANCELLED && (o.isPaid || o.status === OrderStatus.DELIVERED)
+    );
+
+    if (startDate) {
+      const start = new Date(startDate);
+      if (!isNaN(start.getTime())) {
+        filtered = filtered.filter((o) => new Date(o.createdAt) >= start);
+      }
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      if (!isNaN(end.getTime())) {
+        end.setHours(23, 59, 59, 999);
+        filtered = filtered.filter((o) => new Date(o.createdAt) <= end);
+      }
+    }
+
+    const totalPaidOrders = filtered.length;
+    const itemsSubtotal = filtered.reduce((sum, o) => sum + (o.totalItems || 0), 0);
+    const deliverySubtotal = filtered.reduce((sum, o) => sum + (o.deliveryFee || 0), 0);
+    const totalAmountSum = filtered.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+    // Agrupación por canal de recaudación (paymentRecipient)
+    // En el modelo de IgoStore, el cliente paga el total (productos + delivery) directamente
+    // a la cuenta bancaria / Pago Móvil del comercio ('Pago Negocio').
+    // Por ende, el comercio recauda el total en su cuenta y adeuda a IGO:
+    // 1. La tarifa de delivery (para pagar al repartidor de IGO).
+    // 2. La comisión porcentual sobre el subtotal de productos.
+    const bizOrders = filtered.filter((o) => o.paymentRecipient !== 'Pago IGO');
+    const iGoOrders = filtered.filter((o) => o.paymentRecipient === 'Pago IGO');
+
+    const iGoTotal = iGoOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const bizTotal = bizOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+    // Porcentaje de comisión asignado a este comercio (por defecto 10%)
+    const commissionRate = business.commissionPercentage ?? 10;
+    const commissionAmount = itemsSubtotal * (commissionRate / 100);
+
+    // Cálculos de liquidación:
+    const igoOwesBizProducts = iGoOrders.reduce((sum, o) => sum + (o.totalItems || 0), 0);
+    const bizOwesIgoDelivery = bizOrders.reduce((sum, o) => sum + (o.deliveryFee || 0), 0);
+
+    // Deuda que el negocio debe transferir a IGO (Delivery + Comisión)
+    const totalBizDebt = bizOwesIgoDelivery + commissionAmount;
+    // Ganancia neta que le queda al negocio por venta de productos tras pagar comisión
+    const bizNetEarnings = itemsSubtotal - commissionAmount;
+
+    // Balance neto: saldo a favor de IGO frente al negocio
+    // Si netOwed < 0: El negocio debe a IGO la diferencia
+    // Si netOwed > 0: IGO debe al negocio la diferencia (solo si IGO recaudó en 'Pago IGO' más de lo adeudado)
+    const netOwed = igoOwesBizProducts - totalBizDebt;
+
+    // Ajustes bancarios oficiales de IGO y tasa BCV
+    const settings = await this.settingsService.getAllSettings();
+    const bcvRate = parseFloat(settings.BCV_RATE || '75.54');
+    const amountDueUSD = Math.abs(netOwed);
+    const amountDueBs = amountDueUSD * bcvRate;
+    const status = netOwed < 0 ? 'BIZ_OWES_IGO' : netOwed > 0 ? 'IGO_OWES_BIZ' : 'BALANCED';
+
+    return {
+      business: {
+        id: business.id,
+        name: business.name,
+        legalName: business.legalName || business.name,
+        rif: business.rif || 'N/A',
+        commissionPercentage: commissionRate,
+      },
+      period: {
+        startDate: startDate || null,
+        endDate: endDate || null,
+      },
+      summary: {
+        totalPaidOrders,
+        itemsSubtotal: parseFloat(itemsSubtotal.toFixed(2)),
+        deliverySubtotal: parseFloat(deliverySubtotal.toFixed(2)),
+        totalAmountSum: parseFloat(totalAmountSum.toFixed(2)),
+        totalCollectedByBiz: parseFloat(bizTotal.toFixed(2)),
+        iGoTotal: parseFloat(iGoTotal.toFixed(2)),
+        bizTotal: parseFloat(bizTotal.toFixed(2)),
+        commissionPercentage: commissionRate,
+        commissionAmount: parseFloat(commissionAmount.toFixed(2)),
+        igoOwesBizProducts: parseFloat(igoOwesBizProducts.toFixed(2)),
+        bizOwesIgoDelivery: parseFloat(bizOwesIgoDelivery.toFixed(2)),
+        totalBizDebt: parseFloat(totalBizDebt.toFixed(2)),
+        bizNetEarnings: parseFloat(bizNetEarnings.toFixed(2)),
+        netOwed: parseFloat(netOwed.toFixed(2)),
+        status,
+        amountDueUSD: parseFloat(amountDueUSD.toFixed(2)),
+        amountDueBs: parseFloat(amountDueBs.toFixed(2)),
+      },
+      paymentInfo: {
+        bank: settings.IGO_PAGO_MOVIL_BANK || '0102 - Banco de Venezuela',
+        phone: settings.IGO_PAGO_MOVIL_PHONE || '0412-1234567',
+        id: settings.IGO_PAGO_MOVIL_ID || 'V-12345678',
+        name: settings.IGO_PAGO_MOVIL_NAME || 'IGO Delivery C.A.',
+        bcvRate,
+      },
+      orders: filtered.map((o) => {
+        const orderItems = parseFloat((o.totalItems || 0).toFixed(2));
+        const orderDelivery = parseFloat((o.deliveryFee || 0).toFixed(2));
+        const orderCommission = parseFloat((orderItems * (commissionRate / 100)).toFixed(2));
+        const orderDebt = parseFloat((orderDelivery + orderCommission).toFixed(2));
+
+        return {
+          id: o.id,
+          orderNumber: o.orderNumber,
+          createdAt: o.createdAt,
+          status: o.status,
+          isPaid: o.isPaid,
+          paymentRecipient: o.paymentRecipient || 'Pago Negocio',
+          paymentMethod: o.paymentMethod || 'PAGO_MOVIL',
+          totalItems: orderItems,
+          deliveryFee: orderDelivery,
+          totalAmount: parseFloat((o.totalAmount || 0).toFixed(2)),
+          commissionAmount: orderCommission,
+          orderDebtToIgo: orderDebt,
+          customerName: o.user ? (o.user.fullName || 'Cliente') : (o.userIdTemp || 'Cliente'),
+          customerPhone: o.user?.phoneNumber || null,
+        };
+      }),
+    };
+  }
+
   async findPendingDeliveries(user?: User) {
     const isWorker = user && (user.roles.includes('empleado') || user.roles.includes('worker'));
     const vehicle = user?.vehicle || 'Moto';
@@ -576,9 +745,14 @@ export class OrdersService {
       } else {
         order.status = updateOrderDto.status;
         
-        // Si cambia de READY / PENDING / PAID a ON_WAY, setear acceptedAt
-        if (updateOrderDto.status === OrderStatus.ON_WAY && prevStatus !== OrderStatus.ON_WAY) {
+        // Si el comercio acepta el pedido (pasa a PREPARING)
+        if (updateOrderDto.status === OrderStatus.PREPARING && !order.acceptedAt) {
           order.acceptedAt = new Date();
+        }
+
+        // Si cambia de READY / PENDING / PAID a ON_WAY, setear acceptedAt si aún no lo tenía
+        if (updateOrderDto.status === OrderStatus.ON_WAY && prevStatus !== OrderStatus.ON_WAY) {
+          if (!order.acceptedAt) order.acceptedAt = new Date();
         }
         
         // Si cambia a DELIVERED, setear completedAt
@@ -647,8 +821,14 @@ export class OrdersService {
 
     const savedOrder = await this.orderRepository.save(order);
 
+    const fullOrder = await this.orderRepository.findOne({
+      where: { id: savedOrder.id },
+      relations: ['items', 'business', 'user', 'deliveryUser'],
+    });
+    const orderToEmit = fullOrder || savedOrder;
+
     // Notificación Socket en tiempo real
-    this.ordersGateway.notifyOrderUpdated(savedOrder);
+    this.ordersGateway.notifyOrderUpdated(orderToEmit);
 
     // Disparar Notificación Push al cliente según cambio de etapa o estado
     if (order.user?.pushToken) {
@@ -748,9 +928,6 @@ export class OrdersService {
       order.status = OrderStatus.PAID;
       order.verifiedAt = new Date();
 
-      // Notificar a todos vía WebSocket que el pedido ya fue pagado/confirmado y está listo para despachar
-      this.ordersGateway.notifyPaymentVerified(order);
-
       if (order.user?.pushToken) {
         this.notificationsService.sendPushNotification({
           to: order.user.pushToken,
@@ -759,11 +936,35 @@ export class OrdersService {
           data: { orderId: order.id, status: 'PAID' },
         }).catch(() => null);
       }
+
+      // Notificar al dueño del negocio por Push Notification
+      if (order.business?.ownerId) {
+        this.userRepository.findOne({ where: { id: order.business.ownerId } }).then((owner) => {
+          if (owner?.pushToken) {
+            this.notificationsService.sendPushNotification({
+              to: owner.pushToken,
+              title: '¡Pago Confirmado! 🎉',
+              body: `La orden #${String(order.orderNumber).padStart(4, '0')} ($${order.totalAmount.toFixed(2)}) para tu tienda ${order.business?.name || ''} ha sido pagada. ¡Ya puedes aceptarla y prepararla!`,
+              data: { orderId: order.id, status: 'PAID', type: 'BUSINESS_ORDER', businessId: order.business?.id },
+            }).catch(() => null);
+          }
+        }).catch(() => null);
+      }
     }
 
     const savedOrder = await this.orderRepository.save(order);
-    this.ordersGateway.notifyOrderUpdated(savedOrder);
-    return savedOrder;
+
+    const fullOrder = await this.orderRepository.findOne({
+      where: { id: savedOrder.id },
+      relations: ['items', 'business', 'user', 'deliveryUser'],
+    });
+    const orderToEmit = fullOrder || savedOrder;
+
+    if (isPaid) {
+      this.ordersGateway.notifyPaymentVerified(orderToEmit);
+    }
+    this.ordersGateway.notifyOrderUpdated(orderToEmit);
+    return orderToEmit;
   }
 
   // --- REPORTE DE DEUDAS Y COMISIONES POR COMERCIO ---

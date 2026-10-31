@@ -40,10 +40,26 @@ export class ProductsService {
         if (!business) {
           throw new NotFoundException(`Business with id ${business_id} not found`);
         }
+
+        if (productDetails.title) {
+          const trimmedTitle = productDetails.title.trim();
+          const existingProduct = await this.productRepository
+            .createQueryBuilder('product')
+            .where('product.business_id = :businessId', { businessId: business_id })
+            .andWhere('LOWER(TRIM(product.title)) = LOWER(:title)', { title: trimmedTitle })
+            .getOne();
+
+          if (existingProduct) {
+            throw new BadRequestException(
+              `Ya existe un producto con el nombre "${trimmedTitle}" en este negocio.`
+            );
+          }
+        }
       }
 
       const product = this.productRepository.create({
         ...productDetails,
+        isApproved: createProductDto.isApproved !== undefined ? createProductDto.isApproved : true,
         images: images.map(image => this.productImageRepository.create({ url: image })),
         business,
         // 2. GUARDAR LA RELACIÓN
@@ -58,12 +74,12 @@ export class ProductsService {
     }
   }
 
-  async findAll(paginationDto: PaginationDto) {
-    const { limit = 10, offset = 0 } = paginationDto;
+  async findAll(paginationDto?: PaginationDto) {
+    const { limit, offset } = paginationDto || {};
     const products = await this.productRepository.find({
       where: { isApproved: true },
-      take: limit,
-      skip: offset,
+      ...(limit ? { take: limit } : {}),
+      ...(offset ? { skip: offset } : {}),
       relations: { images: true, menuCategory: true },
     });
 

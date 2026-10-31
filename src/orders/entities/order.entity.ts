@@ -61,6 +61,10 @@ export class Order {
     @Column('text', { nullable: true, default: 'TO_PICKUP' })
     driverStage?: string;
 
+    // Código de 4 dígitos para validación de retiro / despacho
+    @Column('text', { nullable: true })
+    pickupCode?: string;
+
     // --- INFORMACIÓN DE ENTREGA (GEOLOCALIZACIÓN) ---
     @Column('float', { nullable: true })
     deliveryLat: number;

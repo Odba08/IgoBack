@@ -60,6 +60,20 @@ export class OrdersController {
     return this.ordersService.findAll();
   }
 
+  @Get('business/:businessId/settlement')
+  getBusinessSettlement(
+    @Param('businessId') businessId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.ordersService.getBusinessSettlement(businessId, startDate, endDate);
+  }
+
+  @Get('business/:businessId')
+  findByBusiness(@Param('businessId') businessId: string) {
+    return this.ordersService.findByBusiness(businessId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.ordersService.findOne(id);
