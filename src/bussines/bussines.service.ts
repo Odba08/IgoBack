@@ -65,11 +65,11 @@ export class BussinessService {
     return this.findBusinessById(business.id);
   }
     
-  async findAllBusiness(paginationDto: PaginationDto) {
-    const { limit = 100, offset = 0 } = paginationDto;
+  async findAllBusiness(paginationDto?: PaginationDto) {
+    const { limit, offset } = paginationDto || {};
     return this.businessRepository.find({
-      take: limit,
-      skip: offset,
+      ...(limit ? { take: limit } : {}),
+      ...(offset ? { skip: offset } : {}),
       relations: { images: true },
     });
   }
@@ -201,17 +201,17 @@ export class BussinessService {
   }
   async findAllForBusiness(
     businessId: string,
-    paginationDto: PaginationDto,
+    paginationDto?: PaginationDto,
   ) {
-    const { limit = 500, offset = 0 } = paginationDto;
+    const { limit, offset } = paginationDto || {};
 
     const business = await this.findBusinessById(businessId);
 
     const products = await this.productRepository.find({
       where: { business: { id: business.id } },
-      take: limit,
-      skip: offset,
-      relations: { images: true, menuCategory: true }
+      ...(limit ? { take: limit } : {}),
+      ...(offset ? { skip: offset } : {}),
+      relations: { images: true, menuCategory: true },
     });
 
     return products.map((product) => ({
