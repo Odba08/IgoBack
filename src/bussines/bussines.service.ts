@@ -211,12 +211,13 @@ export class BussinessService {
       where: { business: { id: business.id } },
       ...(limit ? { take: limit } : {}),
       ...(offset ? { skip: offset } : {}),
-      relations: { images: true, menuCategory: true },
+      relations: { images: true, menuCategory: true, business: true },
+      order: { title: 'ASC' },
     });
 
     return products.map((product) => ({
       ...product,
-      images: product.images.map((img) => img.url),
+      images: product.images ? product.images.map((img) => typeof img === 'string' ? img : img.url) : [],
     }));
   }
 
