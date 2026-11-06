@@ -43,3 +43,4 @@ export class Banner {
   @UpdateDateColumn()
   updatedAt: Date;
 }
+

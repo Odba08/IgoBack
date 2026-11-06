@@ -41,3 +41,4 @@ export class CreateBannerDto {
   @IsInt()
   order?: number;
 }
+
