@@ -136,4 +136,13 @@ export class FilesService {
     if (!existsSync(path)) throw new BadRequestException('Image not found');
     return path;
   }
+
+  getStaticBannerImage(imageName: string) {
+    const staticDir = existsSync(join(__dirname, '../../static/banners'))
+      ? join(__dirname, '../../static/banners')
+      : join(process.cwd(), 'static/banners');
+    const path = join(staticDir, imageName);
+    if (!existsSync(path)) throw new BadRequestException('Banner image not found');
+    return path;
+  }
 }

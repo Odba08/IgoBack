@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module';
 import { SettingsModule } from './settings/settings.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { WebSocketsModule } from './websockets/websockets.module';
+import { BannersModule } from './banners/banners.module';
 
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -68,6 +69,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
     SettingsModule,
     NotificationsModule,
     WebSocketsModule,
+    BannersModule,
   ],
   providers: [
     {

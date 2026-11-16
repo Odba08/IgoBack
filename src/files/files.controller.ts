@@ -48,6 +48,15 @@ export class FilesController {
     res.sendFile(path);
   }
 
+  @Get('banners/:imageName')
+  findBannerImage(
+    @Res() res: Response,
+    @Param('imageName') imageName: string
+  ) {
+    const path = this.filesService.getStaticBannerImage(imageName);
+    res.sendFile(path);
+  }
+
   @Post('products')
   @UseInterceptors(FileInterceptor('file', {
     fileFilter: fileFilter,
