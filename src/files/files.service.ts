@@ -24,7 +24,7 @@ export class FilesService {
     const filePath = join(staticDir, fileName);
     writeFileSync(filePath, buffer);
 
-    const baseHost = hostApi || this.configService.get<string>('HOST_API') || 'https://igoback.onrender.com/api';
+    const baseHost = hostApi || this.configService.get<string>('HOST_API') || 'https://igoback-e6rg.onrender.com/api';
     const cleanHost = baseHost.replace(/\/$/, '');
     const finalUrl = `${cleanHost}/files/products/${fileName}`;
     console.log('💾 [FilesService] Imagen guardada en almacenamiento local como fallback:', finalUrl);

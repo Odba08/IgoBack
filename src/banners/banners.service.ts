@@ -26,7 +26,7 @@ export class BannersService implements OnModuleInit {
   }
 
   async seedDefaults(): Promise<Banner[]> {
-    const baseHost = this.configService.get<string>('HOST_API') || 'https://igoback-b84f.onrender.com/api';
+    const baseHost = this.configService.get<string>('HOST_API') || 'https://igoback-e6rg.onrender.com/api';
     const cleanHost = baseHost.replace(/\/$/, '');
 
     const defaults: Partial<Banner>[] = [
